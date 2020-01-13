@@ -34,7 +34,7 @@ def report(data, verbose):
 def subtaskA(gold, submit, verbose=False):
     return match_keyphrases(gold, submit)
 
-def match_keyphrases(gold, submit):
+def match_keyphrases(gold, submit, skip_incorrect=False):
     correct = {}
     incorrect = {}
     partial = {}
@@ -62,6 +62,9 @@ def match_keyphrases(gold, submit):
 
         # incorrect
         for keyphrase in submit_sent.keyphrases[:]:
+            if skip_incorrect:
+                break
+
             match = gold_sent.find_keyphrase(spans=keyphrase.spans)
             if match:
                 assert match.label != keyphrase.label
@@ -103,7 +106,7 @@ def partial_match(keyphrase1, keyphrase2):
 def subtaskB(gold, submit, data, verbose=False):
     return match_relations(gold, submit, data)
 
-def match_relations(gold, submit, data):
+def match_relations(gold, submit, data, skip_same_as=False, propagate_error=True):
     correct = {}
     spurious = []
     missing = []
@@ -133,6 +136,23 @@ def match_relations(gold, submit, data):
             destination = relation.to_phrase
 
             equivalence.merge([origin, destination])
+
+        if skip_same_as:
+            for relation in gold_sent.relations[:]:
+                if relation.label == SAME_AS:
+                    gold_sent.relations.remove(relation)
+            for relation in submit_sent.relations[:]:
+                if relation.label == SAME_AS:
+                    submit_sent.relations.remove(relation)
+
+        if not propagate_error:
+            found = {**data[CORRECT_A], **data[PARTIAL_A]}
+            for relation in submit_sent.relations[:]:
+                if relation.from_phrase not in found or relation.to_phrase not in found:
+                    submit_sent.relations.remove(relation)
+            for relation in gold_sent.relations[:]:
+                if relation.from_phrase not in found.values() or relation.to_phrase not in found.values():
+                    gold_sent.relations.remove(relation)
 
         # correct
         for relation in submit_sent.relations[:]:

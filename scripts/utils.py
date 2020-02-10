@@ -63,11 +63,14 @@ class Keyphrase:
     def __repr__(self):
         return "Keyphrase(text=%r, label=%r, id=%r)" % (self.text, self.label, self.id)
 
-    def matches(self, other: 'Keyphrase'):
+    def matches(self, other: 'Keyphrase', label=None):
         return isinstance(other, Keyphrase) \
             and self.sentence.text == other.sentence.text \
             and self.spans == other.spans \
-            and self.label == other.label
+            and (
+                (label is None and self.label == other.label)
+                or (label is not None and self.label == label)
+            )
 
 
 class Relation:
@@ -96,12 +99,15 @@ class Relation:
         to_phrase = (self.to_phrase or Relation._Unk()).text
         return "Relation(from=%r, to=%r, label=%r)" % (from_phrase, to_phrase, self.label)
     
-    def matches(self, other: 'Relation'):
+    def matches(self, other: 'Relation', label=None):
         return isinstance(other, Relation) \
             and self.sentence.text == other.sentence.text \
             and self.from_phrase.matches(other.from_phrase) \
             and self.to_phrase.matches(other.to_phrase) \
-            and self.label == other.label
+            and (
+                (label is None and self.label == other.label)
+                or (label is not None and self.label == label)
+            )
 
 
 class Sentence:
@@ -182,15 +188,15 @@ class Sentence:
 
         self.relations = list(new_relations.values())
 
-    def find_first_match(self, annotation):
-        matches = self.find_matches(annotation)
+    def find_first_match(self, annotation, label=None):
+        matches = self.find_matches(annotation, label)
         return None if not matches else matches[0]
     
-    def find_matches(self, annotation):
+    def find_matches(self, annotation, label=None):
         if isinstance(annotation, Keyphrase):
-            return [ k for k in self.keyphrases if annotation.matches(k) ]
+            return [ k for k in self.keyphrases if k.matches(annotation, label) ]
         elif isinstance(annotation, Relation):
-            return [ r for r in self.relations if annotation.matches(r) ]
+            return [ r for r in self.relations if r.matches(annotation, label) ]
         else:
             raise TypeError('Invalid annotation')
 

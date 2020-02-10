@@ -304,7 +304,7 @@ def GoldSelector(self: Ensemble) -> Ensemble:
         else:
             raise Exception('Not found')
 
-        gold_annotation = gold_sentence.find_first_match(annotation)
+        gold_annotation = gold_sentence.find_first_match(annotation, label)
         score |= gold_annotation is not None
 
         score |= len(votes) == len(self.submissions)
@@ -324,6 +324,7 @@ if __name__ == "__main__":
     # e = MaxSelector(F1Builder(Ensemble()))
     # e = BestSelector(F1Builder(Ensemble()))
     e = BestSelector(F1Builder(BinaryEnsemble()))
+    # e = GoldSelector(F1Builder(Ensemble()))
     # e = GoldSelector(F1Builder(BinaryEnsemble()))
     ps = Path('./data/submissions/all')
     pg = Path('./data/testing')

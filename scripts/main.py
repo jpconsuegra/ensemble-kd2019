@@ -117,9 +117,9 @@ class Ensemble:
             label = relation.label
 
             try:
-                rel, info = self.relations[fspans, tspans]
+                rel, info = self.relations[sid, fspans, tspans]
             except KeyError:
-                rel, info = self.relations[fspans, tspans] = (
+                rel, info = self.relations[sid, fspans, tspans] = (
                     Relation(
                         sentence=reference,
                         origin=self.keyphrases[sid,fspans][0].id,
@@ -322,6 +322,7 @@ if __name__ == "__main__":
     # e = Top(BinaryEnsemble(), 1)
     # e = F1Builder(BinaryEnsemble())
     # e = MaxSelector(F1Builder(Ensemble()))
+    # e = BestSelector(F1Builder(Ensemble()))
     e = BestSelector(F1Builder(BinaryEnsemble()))
     # e = GoldSelector(F1Builder(BinaryEnsemble()))
     ps = Path('./data/submissions/all')

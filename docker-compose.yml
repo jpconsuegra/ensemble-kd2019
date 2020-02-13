@@ -1,0 +1,10 @@
+version: "3"
+
+services:
+  ehealthkd:
+    image: "jpconsuegra/ensemble-kd2019"
+    build: "."
+    volumes:
+      - "./:/workspace"
+      - "~/.ssh/id_rsa:/root/.ssh/id_rsa"
+    network_mode: "host"

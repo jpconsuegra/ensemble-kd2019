@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
+from tqdm import tqdm
 
 from .score import compute_metrics, subtaskA, subtaskB
 from .utils import ENTITIES, RELATIONS, Collection, Keyphrase, Relation, Sentence
@@ -158,9 +159,9 @@ class Ensemble:
             sentence.relations = [r for r in sentence.relations if r.label is not None]
 
     def _do_ensemble(self):
-        for keyphrase, info in self.keyphrases.values():
+        for keyphrase, info in tqdm(self.keyphrases.values()):
             self._assign_label(keyphrase, info)
-        for relation, info in self.relations.values():
+        for relation, info in tqdm(self.relations.values()):
             info = info[relation.from_phrase.label, relation.to_phrase.label]
             self._assign_label(relation, info)
 
@@ -249,9 +250,9 @@ class BinaryEnsemble(Ensemble):
             info[submit] = 1
 
     def _do_ensemble(self):
-        for keyphrase, info in self.keyphrases.values():
+        for keyphrase, info in tqdm(self.keyphrases.values()):
             self._assign_label(keyphrase, info)
-        for relation, info in self.relations.values():
+        for relation, info in tqdm(self.relations.values()):
             if (
                 relation.from_phrase.label is not None
                 and relation.to_phrase.label is not None
@@ -420,6 +421,11 @@ class SklearnEnsemble(BinaryEnsemble):
                 gold_annotation = gold_sentence.find_first_match(rel)
                 targets.append(int(gold_annotation is not None))
         return np.asarray(targets)
+
+    def _score_label(self, annotation, label, votes):
+        features = self._annotation_features(label, votes)
+        features = features.reshape(1, -1)
+        return self.model.predict(features)[0]
 
 
 if __name__ == "__main__":

@@ -9,3 +9,5 @@ RUN pip install -U black
 RUN pip install -U pylint
 
 RUN pip install sklearn
+
+RUN pip install -U tqdm

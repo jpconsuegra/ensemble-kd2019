@@ -6,6 +6,7 @@ import collections
 import warnings
 
 from collections import defaultdict
+from typing import List
 
 ENTITIES = [
     'Concept',
@@ -250,10 +251,13 @@ class Sentence:
     def load(finput):
         return [Sentence(s.strip()) for s in finput.open(encoding='utf8').readlines() if s]
 
+    @property
+    def annotated(self):
+        return self.keyphrases or self.relations
 
 class Collection:
     def __init__(self, sentences=None):
-        self.sentences = sentences or []
+        self.sentences: List[Sentence] = sentences or []
 
     def clone(self):
         return Collection([s.clone() for s in self.sentences])

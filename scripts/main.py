@@ -1,6 +1,10 @@
 from collections import defaultdict
 from pathlib import Path
 
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+
 from .score import compute_metrics, subtaskA, subtaskB
 from .utils import ENTITIES, RELATIONS, Collection, Keyphrase, Relation, Sentence
 
@@ -184,6 +188,11 @@ class Ensemble:
     def _validate_label(self, annotation, label, score):
         return label if score > self.table[None] else None
 
+    def _gold_annotated_sid(self):
+        return set(
+            i for i, sentence in enumerate(self.gold.sentences) if sentence.annotated
+        )
+
 
 class BinaryEnsemble(Ensemble):
     def _aggregate_keyphrases(
@@ -346,6 +355,71 @@ def GoldSelector(self: Ensemble) -> Ensemble:
     return self
 
 
+class SklearnEnsemble(BinaryEnsemble):
+    def __init__(self):
+        super().__init__()
+        self.model = None
+
+    def load(self, submits, gold, *, best=False):
+        super().load(submits, gold, best=best)
+        self._train()
+
+    def _train(self):
+        model = self.model = RandomForestClassifier()
+        X_train, X_test, y_train, y_test = self._training_data()
+        model.fit(X_train, y_train)
+
+    def _training_data(self):
+        selected_sids = self._gold_annotated_sid()
+        X = self._build_features(selected_sids)
+        y = self._build_targets(selected_sids)
+        return train_test_split(X, y, stratify=y)
+
+    def _build_features(self, selected_sids):
+        features = []
+        for (sid, *_), (kp, votes) in self.keyphrases.items():
+            if sid in selected_sids:
+                features.append(self._annotation_features(kp.label, votes))
+        for (sid, *_), (rel, votes) in self.relations.items():
+            if sid in selected_sids:
+                features.append(self._annotation_features(rel.label, votes))
+        return np.asarray(features)
+
+    def _annotation_features(self, label, votes):
+        label_features = self._label_to_features(label)
+        vote_features = self._vote_to_features(votes)
+        return np.concatenate([label_features, vote_features])
+
+    def _vote_to_features(self, votes):
+        n_votes = len(self.submissions)
+        features = np.zeros(n_votes)
+        features[list(votes)] = 1
+        return features
+
+    def _label_to_features(self, label):
+        labels = ENTITIES + RELATIONS
+        index = labels.index(label)
+        features = np.zeros(len(labels))
+        features[index] = 1
+        return features
+
+    def _build_targets(self, selected_sids):
+        targets = []
+        for (sid, *_), (kp, _) in self.keyphrases.items():
+            if sid in selected_sids:
+                gold_sentence = self.gold.sentences[sid]
+                assert gold_sentence.annotated
+                gold_annotation = gold_sentence.find_first_match(kp)
+                targets.append(int(gold_annotation is not None))
+        for (sid, *_), (rel, _) in self.relations.items():
+            if sid in selected_sids:
+                gold_sentence = self.gold.sentences[sid]
+                assert gold_sentence.annotated
+                gold_annotation = gold_sentence.find_first_match(rel)
+                targets.append(int(gold_annotation is not None))
+        return np.asarray(targets)
+
+
 if __name__ == "__main__":
     # e = Ensemble()
     # e = BinaryEnsemble()
@@ -354,9 +428,10 @@ if __name__ == "__main__":
     # e = F1Builder(BinaryEnsemble())
     # e = MaxSelector(F1Builder(Ensemble()))
     # e = BestSelector(F1Builder(Ensemble()))
-    e = BestSelector(F1Builder(BinaryEnsemble()))
+    # e = BestSelector(F1Builder(BinaryEnsemble()))
     # e = GoldSelector(F1Builder(Ensemble()))
     # e = GoldSelector(F1Builder(BinaryEnsemble()))
+    e = SklearnEnsemble()
     ps = Path("./data/submissions/all")
     pg = Path("./data/testing")
     e.load(ps, pg, best=True)

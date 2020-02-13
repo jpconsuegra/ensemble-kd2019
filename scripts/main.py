@@ -1,3 +1,4 @@
+import itertools as itt
 from collections import defaultdict
 from pathlib import Path
 
@@ -156,7 +157,15 @@ class Ensemble:
             sentence.keyphrases = [
                 s for s in sentence.keyphrases if s.label is not None
             ]
-            sentence.relations = [r for r in sentence.relations if r.label is not None]
+            sentence.relations = [
+                r
+                for r in sentence.relations
+                if r.label is not None
+                and r.from_phrase is not None
+                and r.from_phrase.label is not None  # don't needed!
+                and r.to_phrase is not None
+                and r.to_phrase.label is not None  # don't needed!
+            ]
 
     def _do_ensemble(self):
         for keyphrase, info in tqdm(self.keyphrases.values()):
@@ -357,9 +366,10 @@ def GoldSelector(self: Ensemble) -> Ensemble:
 
 
 class SklearnEnsemble(BinaryEnsemble):
-    def __init__(self):
+    def __init__(self, split=True):
         super().__init__()
         self.model = None
+        self.split = split
 
     def load(self, submits, gold, *, best=False):
         super().load(submits, gold, best=best)
@@ -376,15 +386,18 @@ class SklearnEnsemble(BinaryEnsemble):
         selected_sids = self._gold_annotated_sid()
         X = self._build_features(selected_sids)
         y = self._build_targets(selected_sids)
-        return train_test_split(X, y, stratify=y)
+        if self.split:
+            return train_test_split(X, y, stratify=y)
+        else:
+            return X, X, y, y
 
-    def _build_features(self, selected_sids):
+    def _build_features(self, selected_sids=None):
         features = []
         for (sid, *_), (kp, votes) in self.keyphrases.items():
-            if sid in selected_sids:
+            if selected_sids is None or sid in selected_sids:
                 features.append(self._annotation_features(kp.label, votes))
         for (sid, *_), (rel, votes) in self.relations.items():
-            if sid in selected_sids:
+            if selected_sids is None or sid in selected_sids:
                 features.append(self._annotation_features(rel.label, votes))
         return np.asarray(features)
 
@@ -406,26 +419,40 @@ class SklearnEnsemble(BinaryEnsemble):
         features[index] = 1
         return features
 
-    def _build_targets(self, selected_sids):
+    def _build_targets(self, selected_sids=None):
         targets = []
         for (sid, *_), (kp, _) in self.keyphrases.items():
-            if sid in selected_sids:
+            if selected_sids is None or sid in selected_sids:
                 gold_sentence = self.gold.sentences[sid]
-                assert gold_sentence.annotated
                 gold_annotation = gold_sentence.find_first_match(kp)
                 targets.append(int(gold_annotation is not None))
         for (sid, *_), (rel, _) in self.relations.items():
-            if sid in selected_sids:
+            if selected_sids is None or sid in selected_sids:
                 gold_sentence = self.gold.sentences[sid]
-                assert gold_sentence.annotated
                 gold_annotation = gold_sentence.find_first_match(rel)
                 targets.append(int(gold_annotation is not None))
         return np.asarray(targets)
 
-    def _score_label(self, annotation, label, votes):
-        features = self._annotation_features(label, votes)
-        features = features.reshape(1, -1)
-        return self.model.predict(features)[0]
+    # # Using only this solves the problem but quite slowly
+    # def _score_label(self, annotation, label, votes):
+    #     features = self._annotation_features(label, votes)
+    #     features = features.reshape(1, -1)
+    #     return self.model.predict(features)[0]
+
+    def _do_ensemble(self):
+        features = self._build_features()
+        predictions = self.model.predict(features)
+
+        assert len(predictions) == len(self.keyphrases) + len(self.relations)
+        for (ann, _), pred in tqdm(
+            zip(
+                itt.chain(self.keyphrases.values(), self.relations.values()),
+                predictions,
+            ),
+            total=len(predictions),
+        ):
+            if pred < 0.5:
+                ann.label = None
 
 
 if __name__ == "__main__":
@@ -439,7 +466,8 @@ if __name__ == "__main__":
     # e = BestSelector(F1Builder(BinaryEnsemble()))
     # e = GoldSelector(F1Builder(Ensemble()))
     # e = GoldSelector(F1Builder(BinaryEnsemble()))
-    e = SklearnEnsemble()
+    # e = SklearnEnsemble()
+    e = SklearnEnsemble(split=False)
     ps = Path("./data/submissions/all")
     pg = Path("./data/testing")
     e.load(ps, pg, best=True)

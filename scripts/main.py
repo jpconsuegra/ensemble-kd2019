@@ -22,26 +22,30 @@ class Ensemble:
         self.relations = {}
         self.table = {}
 
-    def load(self, submits: Path, gold: Path, *, best=False):
-        self._load_gold(gold)
-        self._load_submissions(submits, best=best)
+    def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
+        self._load_gold(gold, scenario)
+        self._load_submissions(submits, scenario, best=best)
         self._filter_submissions()
         self._build_union()
         self._build_table()
 
-    def _load_gold(self, gold: Path):
-        gold_input = next(gold.glob("scenario1-main/*put_scenario1.txt"))
+    def _load_gold(self, gold: Path, scenario="1-main"):
+        number = scenario.split("-")[0]
+        gold_input = next(gold.glob(f"scenario{scenario}/*put_scenario{number}.txt"))
         self.gold = Collection().load(gold_input)
 
-    def _load_submissions(self, submits: Path, *, best=False):
+    def _load_submissions(self, submits: Path, scenario="1-main", *, best=False):
         for userfolder in submits.iterdir():
-            submit = self._load_user_submit(userfolder, best=best)
+            submit = self._load_user_submit(userfolder, scenario, best=best)
             self.submissions.extend(submit)
 
-    def _load_user_submit(self, userfolder: Path, *, best=False):
+    def _load_user_submit(self, userfolder: Path, scenario="1-main", *, best=False):
+        number = scenario.split("-")[0]
         submissions = []
         for submit in userfolder.iterdir():
-            submit_input = next(submit.glob("scenario1-main/*put_scenario1.txt"))
+            submit_input = next(
+                submit.glob(f"scenario{scenario}/*put_scenario{number}.txt")
+            )
             collection = Collection().load(submit_input)
             if self._is_invalid(collection):
                 continue
@@ -371,16 +375,17 @@ class SklearnEnsemble(BinaryEnsemble):
         self.model = None
         self.split = split
 
-    def load(self, submits, gold, *, best=False):
-        super().load(submits, gold, best=best)
-        self._train()
+    def load(self, submits, gold, *, scenario="1-main", best=False):
+        super().load(submits, gold, scenario=scenario, best=best)
+        self.model = self._train()
 
     def _train(self):
-        model = self.model = RandomForestClassifier()
+        model = RandomForestClassifier()
         X_train, X_test, y_train, y_test = self._training_data()
         model.fit(X_train, y_train)
         print("Training score:", model.score(X_train, y_train))
         print("Testing score:", model.score(X_test, y_test))
+        return model
 
     def _training_data(self):
         selected_sids = self._gold_annotated_sid()

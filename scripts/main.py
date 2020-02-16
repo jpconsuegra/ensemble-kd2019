@@ -372,42 +372,41 @@ def GoldSelector(self: Ensemble) -> Ensemble:
 class SklearnEnsemble(BinaryEnsemble):
     def __init__(self, split=True):
         super().__init__()
-        self.model = None
+        self.modelA = None
+        self.modelB = None
         self.split = split
 
     def load(self, submits, gold, *, scenario="1-main", best=False):
         super().load(submits, gold, scenario=scenario, best=best)
-        self.model = self._train()
+        self.modelA = self._train(self.keyphrases, ENTITIES)
+        self.modelB = self._train(self.relations, RELATIONS)
 
-    def _train(self):
+    def _train(self, annotations, labels):
         model = RandomForestClassifier()
-        X_train, X_test, y_train, y_test = self._training_data()
+        X_train, X_test, y_train, y_test = self._training_data(annotations, labels)
         model.fit(X_train, y_train)
         print("Training score:", model.score(X_train, y_train))
         print("Testing score:", model.score(X_test, y_test))
         return model
 
-    def _training_data(self):
+    def _training_data(self, annotations, labels):
         selected_sids = self._gold_annotated_sid()
-        X = self._build_features(selected_sids)
-        y = self._build_targets(selected_sids)
+        X = self._build_features(annotations, labels, selected_sids)
+        y = self._build_targets(annotations, selected_sids)
         if self.split:
             return train_test_split(X, y, stratify=y)
         else:
             return X, X, y, y
 
-    def _build_features(self, selected_sids=None):
+    def _build_features(self, annotations, labels, selected_sids=None):
         features = []
-        for (sid, *_), (kp, votes) in self.keyphrases.items():
+        for (sid, *_), (ann, votes) in annotations.items():
             if selected_sids is None or sid in selected_sids:
-                features.append(self._annotation_features(kp.label, votes))
-        for (sid, *_), (rel, votes) in self.relations.items():
-            if selected_sids is None or sid in selected_sids:
-                features.append(self._annotation_features(rel.label, votes))
+                features.append(self._annotation_features(ann.label, votes, labels))
         return np.asarray(features)
 
-    def _annotation_features(self, label, votes):
-        label_features = self._label_to_features(label)
+    def _annotation_features(self, label, votes, labels):
+        label_features = self._label_to_features(label, labels)
         vote_features = self._vote_to_features(votes)
         return np.concatenate([label_features, vote_features])
 
@@ -417,24 +416,18 @@ class SklearnEnsemble(BinaryEnsemble):
         features[list(votes)] = 1
         return features
 
-    def _label_to_features(self, label):
-        labels = ENTITIES + RELATIONS
+    def _label_to_features(self, label, labels):
         index = labels.index(label)
         features = np.zeros(len(labels))
         features[index] = 1
         return features
 
-    def _build_targets(self, selected_sids=None):
+    def _build_targets(self, annotations, selected_sids=None):
         targets = []
-        for (sid, *_), (kp, _) in self.keyphrases.items():
+        for (sid, *_), (ann, _) in annotations.items():
             if selected_sids is None or sid in selected_sids:
                 gold_sentence = self.gold.sentences[sid]
-                gold_annotation = gold_sentence.find_first_match(kp)
-                targets.append(int(gold_annotation is not None))
-        for (sid, *_), (rel, _) in self.relations.items():
-            if selected_sids is None or sid in selected_sids:
-                gold_sentence = self.gold.sentences[sid]
-                gold_annotation = gold_sentence.find_first_match(rel)
+                gold_annotation = gold_sentence.find_first_match(ann)
                 targets.append(int(gold_annotation is not None))
         return np.asarray(targets)
 
@@ -445,16 +438,16 @@ class SklearnEnsemble(BinaryEnsemble):
     #     return self.model.predict(features)[0]
 
     def _do_ensemble(self):
-        features = self._build_features()
-        predictions = self.model.predict(features)
+        self._do_prediction(self.modelA, self.keyphrases, ENTITIES)
+        self._do_prediction(self.modelB, self.relations, RELATIONS)
 
-        assert len(predictions) == len(self.keyphrases) + len(self.relations)
+    def _do_prediction(self, model, annotations, labels):
+        features = self._build_features(annotations, labels)
+        predictions = model.predict(features)
+
+        assert len(predictions) == len(annotations)
         for (ann, _), pred in tqdm(
-            zip(
-                itt.chain(self.keyphrases.values(), self.relations.values()),
-                predictions,
-            ),
-            total=len(predictions),
+            zip(annotations.values(), predictions), total=len(predictions),
         ):
             if pred < 0.5:
                 ann.label = None

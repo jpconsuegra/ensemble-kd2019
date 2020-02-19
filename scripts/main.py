@@ -15,7 +15,7 @@ STOP = False
 
 class Ensemble:
     def __init__(self):
-        self.submissions = []
+        self.submissions = {}
         self.gold: Collection = None
         self.collection: Collection = None
         self.keyphrases = {}
@@ -37,11 +37,11 @@ class Ensemble:
     def _load_submissions(self, submits: Path, scenario="1-main", *, best=False):
         for userfolder in submits.iterdir():
             submit = self._load_user_submit(userfolder, scenario, best=best)
-            self.submissions.extend(submit)
+            self.submissions.update(submit)
 
     def _load_user_submit(self, userfolder: Path, scenario="1-main", *, best=False):
         number = scenario.split("-")[0]
-        submissions = []
+        submissions = {}
         for submit in userfolder.iterdir():
             submit_input = next(
                 submit.glob(f"scenario{scenario}/*put_scenario{number}.txt")
@@ -49,9 +49,9 @@ class Ensemble:
             collection = Collection().load(submit_input)
             if self._is_invalid(collection):
                 continue
-            submissions.append(collection)
+            submissions[f"{userfolder.name}/{submit.name}"] = collection
         if best and submissions:
-            return [max(submissions, key=lambda x: self._evaluate(x))]
+            return dict([max(submissions.items(), key=lambda x: self._evaluate(x[1]))])
         return submissions
 
     def _is_invalid(self, submit: Collection):
@@ -93,14 +93,14 @@ class Ensemble:
 
     def _build_union(self):
         self.collection = Collection([Sentence(s.text) for s in self.gold.sentences])
-        for i, submit in enumerate(self.submissions):
+        for name, submit in self.submissions.items():
             for n, sentence in enumerate(submit.sentences):
                 reference = self.collection.sentences[n]
-                self._aggregate_keyphrases(sentence, reference, i, n)
-                self._aggregate_relations(sentence, reference, i, n)
+                self._aggregate_keyphrases(sentence, reference, name, n)
+                self._aggregate_relations(sentence, reference, name, n)
 
     def _aggregate_keyphrases(
-        self, sentence: Sentence, reference: Sentence, submit: int, sid: int
+        self, sentence: Sentence, reference: Sentence, submit: str, sid: int
     ):
         for keyphrase in sentence.keyphrases:
             spans = tuple(keyphrase.spans)
@@ -123,7 +123,7 @@ class Ensemble:
             info[label][submit] = 1
 
     def _aggregate_relations(
-        self, sentence: Sentence, reference: Sentence, submit: int, sid: int
+        self, sentence: Sentence, reference: Sentence, submit: str, sid: int
     ):
         for relation in sentence.relations:
             _from = relation.from_phrase
@@ -210,7 +210,7 @@ class Ensemble:
 
 class BinaryEnsemble(Ensemble):
     def _aggregate_keyphrases(
-        self, sentence: Sentence, reference: Sentence, submit: int, sid: int
+        self, sentence: Sentence, reference: Sentence, submit: str, sid: int
     ):
         for keyphrase in sentence.keyphrases:
             spans = tuple(keyphrase.spans)
@@ -233,7 +233,7 @@ class BinaryEnsemble(Ensemble):
             info[submit] = 1
 
     def _aggregate_relations(
-        self, sentence: Sentence, reference: Sentence, submit: int, sid: int
+        self, sentence: Sentence, reference: Sentence, submit: str, sid: int
     ):
         for relation in sentence.relations:
             _from = relation.from_phrase
@@ -280,9 +280,15 @@ class BinaryEnsemble(Ensemble):
 
 def Top(self: Ensemble, k) -> Ensemble:
     def _filter_submissions():
-        self.submissions = list(
-            sorted(self.submissions, key=self._evaluate, reverse=True)
-        )[:k]
+        self.submissions = dict(
+            list(
+                sorted(
+                    self.submissions.items(),
+                    key=lambda x: self._evaluate(x[1]),
+                    reverse=True,
+                )
+            )[:k]
+        )
 
     self._filter_submissions = _filter_submissions
     return self
@@ -291,9 +297,9 @@ def Top(self: Ensemble, k) -> Ensemble:
 def F1Builder(self: Ensemble) -> Ensemble:
     def _build_table():
         self.table = {}
-        for i, submit in enumerate(self.submissions):
+        for name, submit in self.submissions.items():
             for label in ENTITIES + RELATIONS:
-                self.table[i, label] = _score(
+                self.table[name, label] = _score(
                     submit,
                     label,
                     skipA=label not in ENTITIES,  # I know :P
@@ -337,7 +343,7 @@ def BestSelector(self: Ensemble) -> Ensemble:
     self = BooleanThreadshold(self)
 
     def _score_label(annotation, label, votes):
-        best = max(self.table[i, label] for i in range(len(self.submissions)))
+        best = max(self.table[submit, label] for submit in self.submissions)
         return max(self.table[submit, label] >= best for submit in votes)
 
     self._score_label = _score_label

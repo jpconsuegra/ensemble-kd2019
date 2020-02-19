@@ -388,7 +388,7 @@ class SklearnEnsemble(BinaryEnsemble):
         self.modelB = self._train(self.relations, RELATIONS)
 
     def _train(self, annotations, labels):
-        model = RandomForestClassifier()
+        model = RandomForestClassifier(random_state=0)
         X_train, X_test, y_train, y_test = self._training_data(annotations, labels)
         model.fit(X_train, y_train)
         print("Training score:", model.score(X_train, y_train))
@@ -419,7 +419,8 @@ class SklearnEnsemble(BinaryEnsemble):
     def _vote_to_features(self, votes):
         n_votes = len(self.submissions)
         features = np.zeros(n_votes)
-        features[list(votes)] = 1
+        voted = [i for i, submit in enumerate(self.submissions) if submit in votes]
+        features[voted] = 1
         return features
 
     def _label_to_features(self, label, labels):

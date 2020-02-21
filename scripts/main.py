@@ -521,6 +521,27 @@ class IsolatedDualEnsemble(PredictiveEnsemble):
         )
 
 
+class MultiScenarioSKEmsemble(SklearnEnsemble):
+    def _load_data(self, submits, gold, *, scenario="1-main", best=False):
+        super()._load_data(submits, gold, scenario="1-main", best=best)
+        super()._load_data(submits, gold, scenario="2-taskA", best=best)
+        super()._load_data(submits, gold, scenario="3-taskB", best=best)
+
+    def _filter_submissions(self):
+        # unnecessary due to loading verification (`is_invalid`)
+        super()._filter_submissions()
+        old = set(self.submissions)
+        print("Gold sentences:", len(self.gold))
+        print("Submissions' sentences", [len(x) for x in self.submissions.values()])
+        self.submissions = {
+            name: collection
+            for name, collection in self.submissions.items()
+            if len(collection) == len(self.gold)
+        }
+        removed = old - self.submissions.keys()
+        print(f"Removed ({len(removed)} out of {len(old)}):\n", removed)
+
+
 if __name__ == "__main__":
     # e = Ensemble()
     # e = BinaryEnsemble()
@@ -534,7 +555,8 @@ if __name__ == "__main__":
     # e = GoldSelector(F1Builder(BinaryEnsemble()))
     # e = SklearnEnsemble()
     # e = SklearnEnsemble(split=False)
-    e = IsolatedDualEnsemble()
+    # e = IsolatedDualEnsemble()
+    e = MultiScenarioSKEmsemble(split=False)
     ps = Path("./data/submissions/all")
     pg = Path("./data/testing")
     e.load(ps, pg, best=True)

@@ -394,35 +394,7 @@ def GoldSelector(self: Ensemble) -> Ensemble:
     return self
 
 
-class SklearnEnsemble(BinaryEnsemble):
-    def __init__(self, split=True):
-        super().__init__()
-        self.modelA = None
-        self.modelB = None
-        self.split = split
-
-    def load(self, submits, gold, *, scenario="1-main", best=False):
-        super().load(submits, gold, scenario=scenario, best=best)
-        self.modelA = self._train(self.keyphrases, ENTITIES)
-        self.modelB = self._train(self.relations, RELATIONS)
-
-    def _train(self, annotations, labels):
-        model = RandomForestClassifier(random_state=0)
-        X_train, X_test, y_train, y_test = self._training_data(annotations, labels)
-        model.fit(X_train, y_train)
-        print("Training score:", model.score(X_train, y_train))
-        print("Testing score:", model.score(X_test, y_test))
-        return model
-
-    def _training_data(self, annotations, labels):
-        selected_sids = self._gold_annotated_sid()
-        X = self._build_features(annotations, labels, selected_sids)
-        y = self._build_targets(annotations, selected_sids)
-        if self.split:
-            return train_test_split(X, y, stratify=y)
-        else:
-            return X, X, y, y
-
+class PredictiveEnsemble(BinaryEnsemble):
     def _build_features(self, annotations, labels, selected_sids=None):
         features = []
         for (sid, *_), (ann, votes) in annotations.items():
@@ -448,15 +420,6 @@ class SklearnEnsemble(BinaryEnsemble):
         features[index] = 1
         return features
 
-    def _build_targets(self, annotations, selected_sids=None):
-        targets = []
-        for (sid, *_), (ann, _) in annotations.items():
-            if selected_sids is None or sid in selected_sids:
-                gold_sentence = self.gold.sentences[sid]
-                gold_annotation = gold_sentence.find_first_match(ann)
-                targets.append(int(gold_annotation is not None))
-        return np.asarray(targets)
-
     # # Using only this solves the problem but quite slowly
     # def _score_label(self, annotation, label, votes):
     #     features = self._annotation_features(label, votes)
@@ -464,8 +427,7 @@ class SklearnEnsemble(BinaryEnsemble):
     #     return self.model.predict(features)[0]
 
     def _do_ensemble(self):
-        self._do_prediction(self.modelA, self.keyphrases, ENTITIES)
-        self._do_prediction(self.modelB, self.relations, RELATIONS)
+        raise NotImplementedError()
 
     def _do_prediction(self, model, annotations, labels):
         features = self._build_features(annotations, labels)
@@ -479,14 +441,68 @@ class SklearnEnsemble(BinaryEnsemble):
                 ann.label = None
 
 
-class IsolatedDualEnsemble(SklearnEnsemble):
+class TrainableEnsemble(PredictiveEnsemble):
     def __init__(self, split=True):
-        super().__init__(split)
+        super().__init__()
+        self.split = split
+
+    def _train(self, annotations, labels):
+        model = self._init_model()
+        X_train, X_test, y_train, y_test = self._training_data(annotations, labels)
+        model.fit(X_train, y_train)
+        print("Training score:", model.score(X_train, y_train))
+        print("Testing score:", model.score(X_test, y_test))
+        return model
+
+    def _init_model(self):
+        raise NotImplementedError()
+
+    def _training_data(self, annotations, labels):
+        selected_sids = self._gold_annotated_sid()
+        X = self._build_features(annotations, labels, selected_sids)
+        y = self._build_targets(annotations, selected_sids)
+        if self.split:
+            return train_test_split(X, y, stratify=y)
+        else:
+            return X, X, y, y
+
+    def _build_targets(self, annotations, selected_sids=None):
+        targets = []
+        for (sid, *_), (ann, _) in annotations.items():
+            if selected_sids is None or sid in selected_sids:
+                gold_sentence = self.gold.sentences[sid]
+                gold_annotation = gold_sentence.find_first_match(ann)
+                targets.append(int(gold_annotation is not None))
+        return np.asarray(targets)
+
+
+class SklearnEnsemble(TrainableEnsemble):
+    def __init__(self, split=True):
+        super().__init__(split=split)
+        self.modelA = None
+        self.modelB = None
+
+    def load(self, submits, gold, *, scenario="1-main", best=False):
+        super().load(submits, gold, scenario=scenario, best=best)
+        self.modelA = self._train(self.keyphrases, ENTITIES)
+        self.modelB = self._train(self.relations, RELATIONS)
+
+    def _init_model(self):
+        return RandomForestClassifier(random_state=0)
+
+    def _do_ensemble(self):
+        self._do_prediction(self.modelA, self.keyphrases, ENTITIES)
+        self._do_prediction(self.modelB, self.relations, RELATIONS)
+
+
+class IsolatedDualEnsemble(PredictiveEnsemble):
+    def __init__(self):
+        super().__init__()
         self.keyphrase_ensemble = None
         self.relation_ensemble = None
 
     def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
-        BinaryEnsemble.load(self, submits, gold, scenario=scenario, best=best)
+        super().load(submits, gold, scenario=scenario, best=best)
 
         self.keyphrase_ensemble = SklearnEnsemble(split=False)
         self.keyphrase_ensemble.load(submits, gold, scenario="2-taskA", best=best)
@@ -516,8 +532,7 @@ if __name__ == "__main__":
     # e = GoldSelector(F1Builder(BinaryEnsemble()))
     # e = SklearnEnsemble()
     # e = SklearnEnsemble(split=False)
-    # e = IsolatedDualEnsemble()
-    e = IsolatedDualEnsemble(split=False)
+    e = IsolatedDualEnsemble()
     ps = Path("./data/submissions/all")
     pg = Path("./data/testing")
     e.load(ps, pg, best=True)

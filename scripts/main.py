@@ -23,21 +23,37 @@ class Ensemble:
         self.table = {}
 
     def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
-        self._load_gold(gold, scenario)
-        self._load_submissions(submits, scenario, best=best)
+        self._load_data(submits, gold, scenario=scenario, best=best)
         self._filter_submissions()
         self._build_union()
         self._build_table()
 
+    def _load_data(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
+        self._load_gold(gold, scenario)
+        self._load_submissions(submits, scenario, best=best)
+
     def _load_gold(self, gold: Path, scenario="1-main"):
         number = scenario.split("-")[0]
         gold_input = next(gold.glob(f"scenario{scenario}/*put_scenario{number}.txt"))
-        self.gold = Collection().load(gold_input)
+        gold_collection = Collection().load(gold_input)
+        self.gold = (
+            gold_collection
+            if self.collection is None
+            else self.gold.merge(gold_collection)
+        )
 
     def _load_submissions(self, submits: Path, scenario="1-main", *, best=False):
         for userfolder in submits.iterdir():
             submit = self._load_user_submit(userfolder, scenario, best=best)
-            self.submissions.update(submit)
+            self._update_submissions(submit)
+
+    def _update_submissions(self, submit):
+        for key, value in submit.items():
+            try:
+                previous_submit = self.submissions[key]
+                self.submissions[key] = previous_submit.merge(value)
+            except KeyError:
+                self.submissions[key] = value
 
     def _load_user_submit(self, userfolder: Path, scenario="1-main", *, best=False):
         number = scenario.split("-")[0]
@@ -279,7 +295,10 @@ class BinaryEnsemble(Ensemble):
 
 
 def Top(self: Ensemble, k) -> Ensemble:
+    super_filter = self._filter_submissions
+
     def _filter_submissions():
+        super_filter()
         self.submissions = dict(
             list(
                 sorted(
@@ -474,10 +493,6 @@ class IsolatedDualEnsemble(SklearnEnsemble):
 
         self.relation_ensemble = SklearnEnsemble(split=False)
         self.relation_ensemble.load(submits, gold, scenario="3-taskB", best=best)
-
-        print(self.submissions.keys())
-        print(self.keyphrase_ensemble.submissions.keys())
-        print(self.relation_ensemble.submissions.keys())
 
     def _do_ensemble(self):
         self.keyphrase_ensemble._do_prediction(

@@ -262,6 +262,12 @@ class Collection:
     def clone(self):
         return Collection([s.clone() for s in self.sentences])
 
+    def merge(self, *collections: 'Collection'):
+        clone = self.clone()
+        sentences = [s.clone() for c in collections for s in c.sentences]
+        clone.sentences.extend(sentences)
+        return clone
+
     def __len__(self):
         return len(self.sentences)
 

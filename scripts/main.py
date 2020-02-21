@@ -460,6 +460,34 @@ class SklearnEnsemble(BinaryEnsemble):
                 ann.label = None
 
 
+class IsolatedDualEnsemble(SklearnEnsemble):
+    def __init__(self, split=True):
+        super().__init__(split)
+        self.keyphrase_ensemble = None
+        self.relation_ensemble = None
+
+    def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
+        BinaryEnsemble.load(self, submits, gold, scenario=scenario, best=best)
+
+        self.keyphrase_ensemble = SklearnEnsemble(split=False)
+        self.keyphrase_ensemble.load(submits, gold, scenario="2-taskA", best=best)
+
+        self.relation_ensemble = SklearnEnsemble(split=False)
+        self.relation_ensemble.load(submits, gold, scenario="3-taskB", best=best)
+
+        print(self.submissions.keys())
+        print(self.keyphrase_ensemble.submissions.keys())
+        print(self.relation_ensemble.submissions.keys())
+
+    def _do_ensemble(self):
+        self.keyphrase_ensemble._do_prediction(
+            self.keyphrase_ensemble.modelA, self.keyphrases, ENTITIES
+        )
+        self.relation_ensemble._do_prediction(
+            self.relation_ensemble.modelB, self.relations, RELATIONS
+        )
+
+
 if __name__ == "__main__":
     # e = Ensemble()
     # e = BinaryEnsemble()
@@ -472,7 +500,9 @@ if __name__ == "__main__":
     # e = GoldSelector(F1Builder(Ensemble()))
     # e = GoldSelector(F1Builder(BinaryEnsemble()))
     # e = SklearnEnsemble()
-    e = SklearnEnsemble(split=False)
+    # e = SklearnEnsemble(split=False)
+    # e = IsolatedDualEnsemble()
+    e = IsolatedDualEnsemble(split=False)
     ps = Path("./data/submissions/all")
     pg = Path("./data/testing")
     e.load(ps, pg, best=True)

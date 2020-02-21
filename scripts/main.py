@@ -37,9 +37,7 @@ class Ensemble:
         gold_input = next(gold.glob(f"scenario{scenario}/*put_scenario{number}.txt"))
         gold_collection = Collection().load(gold_input)
         self.gold = (
-            gold_collection
-            if self.collection is None
-            else self.gold.merge(gold_collection)
+            gold_collection if self.gold is None else self.gold.merge(gold_collection)
         )
 
     def _load_submissions(self, submits: Path, scenario="1-main", *, best=False):
@@ -63,18 +61,19 @@ class Ensemble:
                 submit.glob(f"scenario{scenario}/*put_scenario{number}.txt")
             )
             collection = Collection().load(submit_input)
-            if self._is_invalid(collection):
+            name = f"{userfolder.name}/{submit.name}"
+            if self._is_invalid(collection, name):
                 continue
-            submissions[f"{userfolder.name}/{submit.name}"] = collection
+            submissions[name] = collection
         if best and submissions:
             return dict([max(submissions.items(), key=lambda x: self._evaluate(x[1]))])
         return submissions
 
-    def _is_invalid(self, submit: Collection):
+    def _is_invalid(self, submit: Collection, name: str):
         error = []
-        if len(submit) != len(self.gold):
+        if (len(submit) + self._current_count(name)) != len(self.gold):
             error.append("ERROR! Wrong number of sentences")
-        for s, g in zip(submit.sentences, self.gold.sentences):
+        for s, g in zip(submit.sentences, self.gold.sentences[-len(submit) :]):
             if s.text != g.text:
                 error.append("ERROR! {0}\nvs\n{1}".format(s, g))
                 break
@@ -83,6 +82,9 @@ class Ensemble:
         if STOP and input("Skip [Y|n]") == "n":
             raise Exception(e)
         return bool(error)
+
+    def _current_count(self, submit_name):
+        return len(self.submissions.get(submit_name, []))
 
     def _evaluate(self, submit: Collection):
         results = self._evaluate_scenario(submit, self.gold)

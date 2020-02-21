@@ -513,6 +513,17 @@ class IsolatedDualEnsemble(PredictiveEnsemble):
         self.relation_ensemble.load(submits, gold, scenario="3-taskB", best=best)
 
     def _do_ensemble(self):
+        print("Recolected votes", len(self.submissions))
+        print("Informative votes (A):", len(self.keyphrase_ensemble.submissions))
+        print(
+            "Votes (A) in use:",
+            len(self.submissions.keys() & self.keyphrase_ensemble.submissions.keys()),
+        )
+        print("Informative votes (B):", len(self.relation_ensemble.submissions))
+        print(
+            "Votes (B) in use:",
+            len(self.submissions.keys() & self.relation_ensemble.submissions.keys()),
+        )
         self.keyphrase_ensemble._do_prediction(
             self.keyphrase_ensemble.modelA, self.keyphrases, ENTITIES
         )
@@ -542,6 +553,28 @@ class MultiScenarioSKEmsemble(SklearnEnsemble):
         print(f"Removed ({len(removed)} out of {len(old)}):\n", removed)
 
 
+class MultiSourceEnsemble(PredictiveEnsemble):
+    def __init__(self):
+        super().__init__()
+        self.ensembler = None
+
+    def load(self, submits, gold, *, scenario="1-main", best=False):
+        super().load(submits, gold, scenario=scenario, best=best)
+
+        self.ensembler = MultiScenarioSKEmsemble(split=False)
+        self.ensembler.load(submits, gold, best=best)
+
+    def _do_ensemble(self):
+        print("Recolected votes:", len(self.submissions))
+        print("Informative votes:", len(self.ensembler.submissions))
+        print(
+            "Votes in use:",
+            len(self.submissions.keys() & self.ensembler.submissions.keys()),
+        )
+        self.ensembler._do_prediction(self.ensembler.modelA, self.keyphrases, ENTITIES)
+        self.ensembler._do_prediction(self.ensembler.modelB, self.relations, RELATIONS)
+
+
 if __name__ == "__main__":
     # e = Ensemble()
     # e = BinaryEnsemble()
@@ -556,7 +589,8 @@ if __name__ == "__main__":
     # e = SklearnEnsemble()
     # e = SklearnEnsemble(split=False)
     # e = IsolatedDualEnsemble()
-    e = MultiScenarioSKEmsemble(split=False)
+    # e = MultiScenarioSKEmsemble(split=False)
+    e = MultiSourceEnsemble()
     ps = Path("./data/submissions/all")
     pg = Path("./data/testing")
     e.load(ps, pg, best=True)

@@ -575,6 +575,18 @@ class MultiSourceEnsemble(PredictiveEnsemble):
         self.ensembler._do_prediction(self.ensembler.modelB, self.relations, RELATIONS)
 
 
+def ExploratoryEnsemble(self: Ensemble, threadshold) -> Ensemble:
+    self = F1Builder(self)
+    super_build = self._build_table
+
+    def _build_table():
+        super_build()
+        self.table[None] = threadshold
+
+    self._build_table = _build_table
+    return self
+
+
 if __name__ == "__main__":
     # e = Ensemble()
     # e = BinaryEnsemble()
@@ -590,7 +602,8 @@ if __name__ == "__main__":
     # e = SklearnEnsemble(split=False)
     # e = IsolatedDualEnsemble()
     # e = MultiScenarioSKEmsemble(split=False)
-    e = MultiSourceEnsemble()
+    # e = MultiSourceEnsemble()
+    e = ExploratoryEnsemble(BinaryEnsemble(), 0.5)  # 0.5 ~ F1Builder(BinaryEnsemble())
     ps = Path("./data/submissions/all")
     pg = Path("./data/testing")
     e.load(ps, pg, best=True)

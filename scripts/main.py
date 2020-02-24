@@ -3,6 +3,9 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
+from autogoal import optimize
+from autogoal.grammar import Continuous
+from autogoal.search import ProgressLogger, ConsoleLogger
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
@@ -25,6 +28,12 @@ class Ensemble:
     def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
         self._load_data(submits, gold, scenario=scenario, best=best)
         self._filter_submissions()
+        self._build_union()
+        self._build_table()
+
+    def rebuild(self):
+        self.keyphrases = {}
+        self.relations = {}
         self._build_union()
         self._build_table()
 
@@ -587,9 +596,20 @@ def ExploratoryEnsemble(self: Ensemble, threadshold) -> Ensemble:
     return self
 
 
+def build_fn(ensemble: Ensemble):
+    def fn(threadshold: Continuous(0, 1)):
+        e = ExploratoryEnsemble(ensemble, threadshold)
+        e.rebuild()
+        e.make()
+        return e._evaluate(e.collection)
+
+    return fn
+
+
 if __name__ == "__main__":
+
     # e = Ensemble()
-    # e = BinaryEnsemble()
+    e = BinaryEnsemble()
     # e = Top(Ensemble(), 1)
     # e = Top(BinaryEnsemble(), 1)
     # e = F1Builder(BinaryEnsemble())
@@ -603,10 +623,14 @@ if __name__ == "__main__":
     # e = IsolatedDualEnsemble()
     # e = MultiScenarioSKEmsemble(split=False)
     # e = MultiSourceEnsemble()
-    e = ExploratoryEnsemble(BinaryEnsemble(), 0.5)  # 0.5 ~ F1Builder(BinaryEnsemble())
+    # e = ExploratoryEnsemble(BinaryEnsemble(), 0.5)  # 0.5 ~ F1Builder(BinaryEnsemble())
     ps = Path("./data/submissions/all")
     pg = Path("./data/testing")
     e.load(ps, pg, best=True)
     # e.load(ps, pg, best=False)
-    e.make()
-    print("==== SCORE ====\n", e._evaluate(e.collection))
+
+    # e.make()
+    # print("==== SCORE ====\n", e._evaluate(e.collection))
+
+    loggers = [ProgressLogger(), ConsoleLogger()]
+    print(optimize(build_fn(e), logger=loggers, iterations=5))

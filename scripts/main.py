@@ -1,11 +1,12 @@
 import itertools as itt
 from collections import defaultdict
 from pathlib import Path
+from statistics import mean, quantiles, stdev, variance
 
 import numpy as np
 from autogoal import optimize
 from autogoal.grammar import Continuous
-from autogoal.search import ProgressLogger, ConsoleLogger
+from autogoal.search import ConsoleLogger, ProgressLogger
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
@@ -50,6 +51,9 @@ class Ensemble:
         self.load_stack.append(len(gold_collection))
 
     def _load_submissions(self, submits: Path, scenario="1-main", *, best=False):
+        if submits is None:
+            print("No submission directory provided!")
+            return
         for userfolder in submits.iterdir():
             submit = self._load_user_submit(userfolder, scenario, best=best)
             self._update_submissions(submit)
@@ -458,14 +462,15 @@ class PredictiveEnsemble(BinaryEnsemble):
 
 
 class TrainableEnsemble(PredictiveEnsemble):
-    def __init__(self, split=False, ignore=()):
+    def __init__(self, split=False):
         super().__init__()
         self.split = split
-        self.ignore = ignore
 
-    def _train(self, annotations, labels):
+    def _train(self, annotations, labels, ignore=()):
         model = self._init_model()
-        X_train, X_test, y_train, y_test = self._training_data(annotations, labels)
+        X_train, X_test, y_train, y_test = self._training_data(
+            annotations, labels, ignore
+        )
         model.fit(X_train, y_train)
         print("Training score:", model.score(X_train, y_train))
         print("Testing score:", model.score(X_test, y_test))
@@ -474,8 +479,8 @@ class TrainableEnsemble(PredictiveEnsemble):
     def _init_model(self):
         raise NotImplementedError()
 
-    def _training_data(self, annotations, labels):
-        selected_sids = {x for x in self.gold_annotated_sid() if x not in self.ignore}
+    def _training_data(self, annotations, labels, ignore=()):
+        selected_sids = {x for x in self.gold_annotated_sid() if x not in ignore}
         X = self._build_features(annotations, labels, selected_sids)
         y = self._build_targets(annotations, selected_sids)
         if self.split:
@@ -494,15 +499,15 @@ class TrainableEnsemble(PredictiveEnsemble):
 
 
 class SklearnEnsemble(TrainableEnsemble):
-    def __init__(self, split=False, ignore=()):
-        super().__init__(split=split, ignore=ignore)
+    def __init__(self, split=False):
+        super().__init__(split=split)
         self.modelA = None
         self.modelB = None
 
-    def build(self):
+    def build(self, ignore=()):
         super().build()
-        self.modelA = self._train(self.keyphrases, ENTITIES)
-        self.modelB = self._train(self.relations, RELATIONS)
+        self.modelA = self._train(self.keyphrases, ENTITIES, ignore)
+        self.modelB = self._train(self.relations, RELATIONS, ignore)
 
     def _init_model(self):
         return RandomForestClassifier(random_state=0)
@@ -571,17 +576,18 @@ class MultiScenarioSKEmsemble(SklearnEnsemble):
 
 
 class MultiSourceEnsemble(PredictiveEnsemble):
-    def __init__(self, ignore=()):
+    def __init__(self):
         super().__init__()
         self.ensembler = None
-        self.ignore = ignore
 
     def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
         super().load(submits, gold, scenario=scenario, best=best)
-
-        self.ensembler = MultiScenarioSKEmsemble(split=False, ignore=self.ignore)
+        self.ensembler = MultiScenarioSKEmsemble(split=False)
         self.ensembler.load(submits, gold, best=best)
-        self.ensembler.build()
+
+    def build(self, ignore=()):
+        super().build()
+        self.ensembler.build(ignore)
 
     def _do_ensemble(self):
         print("Recolected votes:", len(self.submissions))
@@ -594,24 +600,31 @@ class MultiSourceEnsemble(PredictiveEnsemble):
         self.ensembler._do_prediction(self.ensembler.modelB, self.relations, RELATIONS)
 
 
-def validate_model(submits: Path, gold: Path, *, best=True):
-    scores = []
+def validate_model(submits: Path, gold: Path, *, best=True, limit=None):
 
-    reference = BinaryEnsemble()
-    reference.load(submits, gold, best=best)
+    ensemble = MultiSourceEnsemble()
+    ensemble.load(submits, gold, best=best)
 
-    for x in tqdm(reference.gold_annotated_sid()):
-        ensemble = MultiSourceEnsemble(ignore=(x,))
-        ensemble.load(submits, gold, best=best)
-        ensemble.build()
-        ensemble.make()
-        ensembled_collection = Collection([ensemble.collection.sentences[x]])
-        gold_collection = Collection([ensemble.gold.sentences[x]])
-        score = ensemble.evaluate(ensembled_collection, gold_collection)
-        scores.append(score)
-        print("|= score =|", score)
+    selected_sids = [
+        x for x in ensemble.gold_annotated_sid() if x < ensemble.load_stack[0]
+    ]
+    if limit is not None:
+        selected_sids = selected_sids[:limit]
 
-    return scores
+    with open("log.txt", mode="w") as fd:
+        scores = []
+
+        for sid in tqdm(selected_sids):
+            ensemble.build(ignore=(sid,))
+            ensemble.make()
+            ensembled_collection = Collection([ensemble.collection.sentences[sid]])
+            gold_collection = Collection([ensemble.gold.sentences[sid]])
+            score = ensemble.evaluate(ensembled_collection, gold_collection)
+            scores.append(score)
+            fd.write(f"{sid} -> {score}\n")
+            fd.flush()
+
+        return scores
 
 
 def ExploratoryEnsemble(self: Ensemble, threadshold) -> Ensemble:
@@ -667,7 +680,12 @@ if __name__ == "__main__":
 
     scores = validate_model(ps, pg, best=False)
     print("\n".join(str(x) for x in scores))
-    print("|= avg =|", sum(scores) / len(scores))
+    print("=================================")
+    print("|= mean ======", mean(scores))
+    print("|= stdev =====", stdev(scores))
+    print("|= variance ==", variance(scores))
+    print("|= quantiles =", quantiles(scores))
+    print("=================================")
 
     # loggers = [ProgressLogger(), ConsoleLogger()]
     # print(optimize(build_fn(e), logger=loggers, iterations=5))

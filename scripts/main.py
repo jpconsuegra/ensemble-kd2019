@@ -594,6 +594,26 @@ class MultiSourceEnsemble(PredictiveEnsemble):
         self.ensembler._do_prediction(self.ensembler.modelB, self.relations, RELATIONS)
 
 
+def validate_model(submits: Path, gold: Path, *, best=True):
+    scores = []
+
+    reference = BinaryEnsemble()
+    reference.load(submits, gold, best=best)
+
+    for x in tqdm(reference.gold_annotated_sid()):
+        ensemble = MultiSourceEnsemble(ignore=(x,))
+        ensemble.load(submits, gold, best=best)
+        ensemble.build()
+        ensemble.make()
+        ensembled_collection = Collection([ensemble.collection.sentences[x]])
+        gold_collection = Collection([ensemble.gold.sentences[x]])
+        score = ensemble.evaluate(ensembled_collection, gold_collection)
+        scores.append(score)
+        print("|= score =|", score)
+
+    return scores
+
+
 def ExploratoryEnsemble(self: Ensemble, threadshold) -> Ensemble:
     self = F1Builder(self)
     super_build = self._build_table
@@ -645,5 +665,9 @@ if __name__ == "__main__":
     # e.make()
     # print("==== SCORE ====\n", e.eval())
 
-    loggers = [ProgressLogger(), ConsoleLogger()]
-    print(optimize(build_fn(e), logger=loggers, iterations=5))
+    scores = validate_model(ps, pg, best=False)
+    print("\n".join(str(x) for x in scores))
+    print("|= avg =|", sum(scores) / len(scores))
+
+    # loggers = [ProgressLogger(), ConsoleLogger()]
+    # print(optimize(build_fn(e), logger=loggers, iterations=5))

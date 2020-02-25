@@ -29,10 +29,8 @@ class Ensemble:
     def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
         self._load_data(submits, gold, scenario=scenario, best=best)
         self._filter_submissions()
-        self._build_union()
-        self._build_table()
 
-    def rebuild(self):
+    def build(self):
         self.keyphrases = {}
         self.relations = {}
         self._build_union()
@@ -236,7 +234,7 @@ class Ensemble:
     def _validate_label(self, annotation, label, score):
         return label if score > self.table[None] else None
 
-    def _gold_annotated_sid(self):
+    def gold_annotated_sid(self):
         return set(
             i for i, sentence in enumerate(self.gold.sentences) if sentence.annotated
         )
@@ -476,11 +474,8 @@ class TrainableEnsemble(PredictiveEnsemble):
     def _init_model(self):
         raise NotImplementedError()
 
-    def _gold_annotated_sid(self):
-        return {x for x in super()._gold_annotated_sid() if x not in self.ignore}
-
     def _training_data(self, annotations, labels):
-        selected_sids = self._gold_annotated_sid()
+        selected_sids = {x for x in self.gold_annotated_sid() if x not in self.ignore}
         X = self._build_features(annotations, labels, selected_sids)
         y = self._build_targets(annotations, selected_sids)
         if self.split:
@@ -504,8 +499,8 @@ class SklearnEnsemble(TrainableEnsemble):
         self.modelA = None
         self.modelB = None
 
-    def load(self, submits, gold, *, scenario="1-main", best=False):
-        super().load(submits, gold, scenario=scenario, best=best)
+    def build(self):
+        super().build()
         self.modelA = self._train(self.keyphrases, ENTITIES)
         self.modelB = self._train(self.relations, RELATIONS)
 
@@ -528,9 +523,11 @@ class IsolatedDualEnsemble(PredictiveEnsemble):
 
         self.keyphrase_ensemble = SklearnEnsemble(split=False)
         self.keyphrase_ensemble.load(submits, gold, scenario="2-taskA", best=best)
+        self.keyphrase_ensemble.build()
 
         self.relation_ensemble = SklearnEnsemble(split=False)
         self.relation_ensemble.load(submits, gold, scenario="3-taskB", best=best)
+        self.relation_ensemble.build()
 
     def _do_ensemble(self):
         print("Recolected votes", len(self.submissions))
@@ -579,11 +576,12 @@ class MultiSourceEnsemble(PredictiveEnsemble):
         self.ensembler = None
         self.ignore = ignore
 
-    def load(self, submits, gold, *, scenario="1-main", best=False):
+    def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
         super().load(submits, gold, scenario=scenario, best=best)
 
         self.ensembler = MultiScenarioSKEmsemble(split=False, ignore=self.ignore)
         self.ensembler.load(submits, gold, best=best)
+        self.ensembler.build()
 
     def _do_ensemble(self):
         print("Recolected votes:", len(self.submissions))
@@ -611,7 +609,7 @@ def ExploratoryEnsemble(self: Ensemble, threadshold) -> Ensemble:
 def build_fn(ensemble: Ensemble):
     def fn(threadshold: Continuous(0, 1)):
         e = ExploratoryEnsemble(ensemble, threadshold)
-        e.rebuild()
+        e.build()
         e.make()
         return e.eval()
 
@@ -619,6 +617,9 @@ def build_fn(ensemble: Ensemble):
 
 
 if __name__ == "__main__":
+
+    ps = Path("./data/submissions/all")
+    pg = Path("./data/testing")
 
     # e = Ensemble()
     e = BinaryEnsemble()
@@ -636,11 +637,11 @@ if __name__ == "__main__":
     # e = MultiScenarioSKEmsemble()
     # e = MultiSourceEnsemble()
     # e = ExploratoryEnsemble(BinaryEnsemble(), 0.5)  # 0.5 ~ F1Builder(BinaryEnsemble())
-    ps = Path("./data/submissions/all")
-    pg = Path("./data/testing")
+
     # e.load(ps, pg, best=True)
     e.load(ps, pg, best=False)
 
+    # e.build()
     # e.make()
     # print("==== SCORE ====\n", e.eval())
 

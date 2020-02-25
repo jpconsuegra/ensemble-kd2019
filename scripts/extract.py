@@ -32,6 +32,7 @@ if __name__ == "__main__":
     ps = Path("./data/submissions/all")
     pg = Path("./data/testing")
     e.load(ps, pg, best=True)
+    e.build()
     sentences = sort_sentences(e)
     for s, score in sentences:
         print(f"{s.text}\t{score}")

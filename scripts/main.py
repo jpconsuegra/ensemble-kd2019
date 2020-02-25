@@ -24,6 +24,7 @@ class Ensemble:
         self.keyphrases = {}
         self.relations = {}
         self.table = {}
+        self.load_stack = []
 
     def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
         self._load_data(submits, gold, scenario=scenario, best=best)
@@ -48,6 +49,7 @@ class Ensemble:
         self.gold = (
             gold_collection if self.gold is None else self.gold.merge(gold_collection)
         )
+        self.load_stack.append(len(gold_collection))
 
     def _load_submissions(self, submits: Path, scenario="1-main", *, best=False):
         for userfolder in submits.iterdir():
@@ -75,7 +77,7 @@ class Ensemble:
                 continue
             submissions[name] = collection
         if best and submissions:
-            return dict([max(submissions.items(), key=lambda x: self._evaluate(x[1]))])
+            return dict([max(submissions.items(), key=lambda x: self.eval(x[1]))])
         return submissions
 
     def _is_invalid(self, submit: Collection, name: str):
@@ -95,12 +97,17 @@ class Ensemble:
     def _current_count(self, submit_name):
         return len(self.submissions.get(submit_name, []))
 
-    def _evaluate(self, submit: Collection):
-        results = self._evaluate_scenario(submit, self.gold)
+    def eval(self, submit: Collection = None):
+        return self.evaluate(self.collection if submit is None else submit, self.gold)
+
+    @classmethod
+    def evaluate(cls, submit: Collection, gold: Collection, skipA=False, skipB=False):
+        results = cls._evaluate_scenario(submit, gold, skipA=skipA, skipB=skipB)
         return results["f1"]
 
+    @staticmethod
     def _evaluate_scenario(
-        self, submit: Collection, gold: Collection, skipA=False, skipB=False
+        submit: Collection, gold: Collection, skipA=False, skipB=False
     ):
         resultA = subtaskA(gold, submit)
         resultB = subtaskB(gold, submit, resultA)
@@ -314,7 +321,7 @@ def Top(self: Ensemble, k) -> Ensemble:
             list(
                 sorted(
                     self.submissions.items(),
-                    key=lambda x: self._evaluate(x[1]),
+                    key=lambda x: self.eval(x[1]),
                     reverse=True,
                 )
             )[:k]
@@ -453,9 +460,10 @@ class PredictiveEnsemble(BinaryEnsemble):
 
 
 class TrainableEnsemble(PredictiveEnsemble):
-    def __init__(self, split=True):
+    def __init__(self, split=False, ignore=()):
         super().__init__()
         self.split = split
+        self.ignore = ignore
 
     def _train(self, annotations, labels):
         model = self._init_model()
@@ -467,6 +475,9 @@ class TrainableEnsemble(PredictiveEnsemble):
 
     def _init_model(self):
         raise NotImplementedError()
+
+    def _gold_annotated_sid(self):
+        return {x for x in super()._gold_annotated_sid() if x not in self.ignore}
 
     def _training_data(self, annotations, labels):
         selected_sids = self._gold_annotated_sid()
@@ -488,8 +499,8 @@ class TrainableEnsemble(PredictiveEnsemble):
 
 
 class SklearnEnsemble(TrainableEnsemble):
-    def __init__(self, split=True):
-        super().__init__(split=split)
+    def __init__(self, split=False, ignore=()):
+        super().__init__(split=split, ignore=ignore)
         self.modelA = None
         self.modelB = None
 
@@ -563,14 +574,15 @@ class MultiScenarioSKEmsemble(SklearnEnsemble):
 
 
 class MultiSourceEnsemble(PredictiveEnsemble):
-    def __init__(self):
+    def __init__(self, ignore=()):
         super().__init__()
         self.ensembler = None
+        self.ignore = ignore
 
     def load(self, submits, gold, *, scenario="1-main", best=False):
         super().load(submits, gold, scenario=scenario, best=best)
 
-        self.ensembler = MultiScenarioSKEmsemble(split=False)
+        self.ensembler = MultiScenarioSKEmsemble(split=False, ignore=self.ignore)
         self.ensembler.load(submits, gold, best=best)
 
     def _do_ensemble(self):
@@ -601,7 +613,7 @@ def build_fn(ensemble: Ensemble):
         e = ExploratoryEnsemble(ensemble, threadshold)
         e.rebuild()
         e.make()
-        return e._evaluate(e.collection)
+        return e.eval()
 
     return fn
 
@@ -619,18 +631,18 @@ if __name__ == "__main__":
     # e = GoldSelector(F1Builder(Ensemble()))
     # e = GoldSelector(F1Builder(BinaryEnsemble()))
     # e = SklearnEnsemble()
-    # e = SklearnEnsemble(split=False)
+    # e = SklearnEnsemble(split=True)
     # e = IsolatedDualEnsemble()
-    # e = MultiScenarioSKEmsemble(split=False)
+    # e = MultiScenarioSKEmsemble()
     # e = MultiSourceEnsemble()
     # e = ExploratoryEnsemble(BinaryEnsemble(), 0.5)  # 0.5 ~ F1Builder(BinaryEnsemble())
     ps = Path("./data/submissions/all")
     pg = Path("./data/testing")
-    e.load(ps, pg, best=True)
-    # e.load(ps, pg, best=False)
+    # e.load(ps, pg, best=True)
+    e.load(ps, pg, best=False)
 
     # e.make()
-    # print("==== SCORE ====\n", e._evaluate(e.collection))
+    # print("==== SCORE ====\n", e.eval())
 
     loggers = [ProgressLogger(), ConsoleLogger()]
     print(optimize(build_fn(e), logger=loggers, iterations=5))

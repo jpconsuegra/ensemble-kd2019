@@ -662,9 +662,19 @@ class MultiSourceEnsemble(PredictiveEnsemble):
         self.ensembler._do_prediction(self.ensembler.modelB, self.relations, RELATIONS)
 
 
-def validate_model(submits: Path, gold: Path, *, best=True, limit=None):
+def validate_model(
+    submits: Path,
+    gold: Path,
+    *,
+    best=True,
+    limit=None,
+    model_type=RandomForestClassifier,
+    model_handler_init=AllInOneModel,
+):
 
-    ensemble = MultiSourceEnsemble()
+    ensemble = MultiSourceEnsemble(
+        model_type=model_type, model_handler_init=model_handler_init
+    )
     ensemble.load(submits, gold, best=best)
 
     selected_sids = [
@@ -743,7 +753,7 @@ if __name__ == "__main__":
     # e.make()
     # print("==== SCORE ====\n", e.eval())
 
-    scores = validate_model(ps, pg, best=False)
+    scores = validate_model(ps, pg, best=False, model_type=RandomForestClassifier)
     print("\n".join(str(x) for x in scores))
     print("=================================")
     print("|= mean ======", mean(scores))

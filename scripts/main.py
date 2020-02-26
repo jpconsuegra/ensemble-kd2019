@@ -450,8 +450,8 @@ class ConcatenatedFeatures:
 class AllInOneModel:
     def __init__(self, *, voters, labels, model_init):
         self._builder = ConcatenatedFeatures(
-            (VotingFeatures(voters), self._get_votes),
             (LabelFeatures(labels), self._get_label),
+            (VotingFeatures(voters), self._get_votes),
         )
         self._model = model_init()
 

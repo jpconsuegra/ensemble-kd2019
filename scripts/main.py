@@ -8,7 +8,7 @@ from autogoal import optimize
 from autogoal.grammar import Continuous
 from autogoal.search import ConsoleLogger, ProgressLogger
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
 from tqdm import tqdm
 
 from .score import compute_metrics, subtaskA, subtaskB
@@ -414,93 +414,141 @@ def GoldSelector(self: Ensemble) -> Ensemble:
     return self
 
 
-class PredictiveEnsemble(BinaryEnsemble):
-    def _build_features(self, annotations, labels, selected_sids=None):
-        features = []
-        for (sid, *_), (ann, votes) in annotations.items():
-            if selected_sids is None or sid in selected_sids:
-                features.append(self._annotation_features(ann.label, votes, labels))
-        return np.asarray(features)
+class VotingFeatures:
+    def __init__(self, voters):
+        self._voters = voters
 
-    def _annotation_features(self, label, votes, labels):
-        label_features = self._label_to_features(label, labels)
-        vote_features = self._vote_to_features(votes)
-        return np.concatenate([label_features, vote_features])
-
-    def _vote_to_features(self, votes):
-        n_votes = len(self.submissions)
+    def __call__(self, votes):
+        n_votes = len(self._voters)
         features = np.zeros(n_votes)
-        voted = [i for i, submit in enumerate(self.submissions) if submit in votes]
+        voted = [i for i, submit in enumerate(self._voters) if submit in votes]
         features[voted] = 1
         return features
 
-    def _label_to_features(self, label, labels):
-        index = labels.index(label)
-        features = np.zeros(len(labels))
+
+class LabelFeatures:
+    def __init__(self, labels):
+        self._labels = labels
+
+    def __call__(self, label):
+        index = self._labels.index(label)
+        features = np.zeros(len(self._labels))
         features[index] = 1
         return features
 
-    # # Using only this solves the problem but quite slowly
-    # def _score_label(self, annotation, label, votes):
-    #     features = self._annotation_features(label, votes)
-    #     features = features.reshape(1, -1)
-    #     return self.model.predict(features)[0]
 
+class ConcatenatedFeatures:
+    def __init__(self, *builders_and_handlers):
+        self._builders_and_handlers = builders_and_handlers
+
+    def __call__(self, item):
+        return np.concatenate(
+            [builder(handler(item)) for builder, handler in self._builders_and_handlers]
+        )
+
+
+class AllInOneModel:
+    def __init__(self, *, voters, labels, model_init):
+        self._builder = ConcatenatedFeatures(
+            (VotingFeatures(voters), self._get_votes),
+            (LabelFeatures(labels), self._get_label),
+        )
+        self._model = model_init()
+
+    def _get_label(self, item):
+        ann, _ = item
+        return ann.label
+
+    def _get_votes(self, item):
+        _, votes = item
+        return votes
+
+    def __call__(self, annotations, selected_sids=None):
+        sids = []
+        anns = []
+        features = []
+        for (sid, *_), (ann, votes) in annotations.items():
+            if selected_sids is None or sid in selected_sids:
+                features.append(self._builder((ann, votes)))
+                sids.append(sid)
+                anns.append(ann)
+        return [("all", self._model, sids, anns, np.asarray(features))]
+
+
+class PerLabelModel:
+    def __init__(self, *, voters, labels, model_init):
+        self._builder = VotingFeatures(voters)
+        self._models = {label: model_init() for label in labels}
+
+    def __call__(self, annotations, selected_sids=None):
+        per_label = defaultdict(lambda: ([], [], []))
+        for (sid, *_), (ann, votes) in annotations.items():
+            if selected_sids is None or sid in selected_sids:
+                sids, anns, features = per_label[ann.label]
+
+                features.append(self._builder(votes))
+                sids.append(sid)
+                anns.append(ann)
+
+        return [
+            (label, self._models[label], sids, anns, np.asarray(features))
+            for label, (sids, anns, features) in per_label.items()
+        ]
+
+
+class PredictiveEnsemble(BinaryEnsemble):
     def _do_ensemble(self):
         raise NotImplementedError()
 
-    def _do_prediction(self, model, annotations, labels):
-        features = self._build_features(annotations, labels)
-        predictions = model.predict(features)
+    def _do_prediction(self, model_handler, annotations, labels):
+        for _, model, _, anns, features in model_handler(annotations):
+            predictions = model.predict(features)
 
-        assert len(predictions) == len(annotations)
-        for (ann, _), pred in tqdm(
-            zip(annotations.values(), predictions), total=len(predictions),
-        ):
-            if pred < 0.5:
-                ann.label = None
+            assert len(predictions) == len(anns)
+            for ann, pred in tqdm(zip(anns, predictions), total=len(anns)):
+                if pred < 0.5:
+                    ann.label = None
 
 
 class TrainableEnsemble(PredictiveEnsemble):
-    def __init__(self, split=False):
+    def __init__(self, model_handler_init=AllInOneModel):
         super().__init__()
-        self.split = split
+        self._model_handler_init = model_handler_init
 
     def _train(self, annotations, labels, ignore=()):
-        model = self._init_model()
-        X_train, X_test, y_train, y_test = self._training_data(
-            annotations, labels, ignore
+        selected_sids = {x for x in self.gold_annotated_sid() if x not in ignore}
+
+        model_handler = self._model_handler_init(
+            voters=self.submissions, labels=labels, model_init=self._init_model
         )
-        model.fit(X_train, y_train)
-        print("Training score:", model.score(X_train, y_train))
-        print("Testing score:", model.score(X_test, y_test))
-        return model
+
+        for tag, model, sids, anns, X in model_handler(
+            annotations, selected_sids=selected_sids
+        ):
+            y = self._build_targets(anns, sids)
+            model.fit(X, y)
+            print(f"Training score ({tag}):", model.score(X, y))
+
+        return model_handler
 
     def _init_model(self):
         raise NotImplementedError()
 
-    def _training_data(self, annotations, labels, ignore=()):
-        selected_sids = {x for x in self.gold_annotated_sid() if x not in ignore}
-        X = self._build_features(annotations, labels, selected_sids)
-        y = self._build_targets(annotations, selected_sids)
-        if self.split:
-            return train_test_split(X, y, stratify=y)
-        else:
-            return X, X, y, y
-
-    def _build_targets(self, annotations, selected_sids=None):
+    def _build_targets(self, annotations, sids):
         targets = []
-        for (sid, *_), (ann, _) in annotations.items():
-            if selected_sids is None or sid in selected_sids:
-                gold_sentence = self.gold.sentences[sid]
-                gold_annotation = gold_sentence.find_first_match(ann)
-                targets.append(int(gold_annotation is not None))
+        for ann, sid in zip(annotations, sids):
+            gold_sentence = self.gold.sentences[sid]
+            gold_annotation = gold_sentence.find_first_match(ann)
+            targets.append(int(gold_annotation is not None))
         return np.asarray(targets)
 
 
 class SklearnEnsemble(TrainableEnsemble):
-    def __init__(self, split=False):
-        super().__init__(split=split)
+    def __init__(
+        self, model_type=RandomForestClassifier, model_handler_init=AllInOneModel
+    ):
+        super().__init__(model_handler_init=model_handler_init)
+        self._model_type = model_type
         self.modelA = None
         self.modelB = None
 
@@ -510,7 +558,7 @@ class SklearnEnsemble(TrainableEnsemble):
         self.modelB = self._train(self.relations, RELATIONS, ignore)
 
     def _init_model(self):
-        return RandomForestClassifier(random_state=0)
+        return self._model_type(random_state=0)
 
     def _do_ensemble(self):
         self._do_prediction(self.modelA, self.keyphrases, ENTITIES)
@@ -518,19 +566,27 @@ class SklearnEnsemble(TrainableEnsemble):
 
 
 class IsolatedDualEnsemble(PredictiveEnsemble):
-    def __init__(self):
+    def __init__(
+        self, model_type=RandomForestClassifier, model_handler_init=AllInOneModel
+    ):
         super().__init__()
+        self._model_type = model_type
+        self._model_handler_init = model_handler_init
         self.keyphrase_ensemble = None
         self.relation_ensemble = None
 
     def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
         super().load(submits, gold, scenario=scenario, best=best)
 
-        self.keyphrase_ensemble = SklearnEnsemble(split=False)
+        self.keyphrase_ensemble = SklearnEnsemble(
+            model_type=self._model_type, model_handler_init=self._model_handler_init
+        )
         self.keyphrase_ensemble.load(submits, gold, scenario="2-taskA", best=best)
         self.keyphrase_ensemble.build()
 
-        self.relation_ensemble = SklearnEnsemble(split=False)
+        self.relation_ensemble = SklearnEnsemble(
+            model_type=self._model_type, model_handler_init=self._model_handler_init
+        )
         self.relation_ensemble.load(submits, gold, scenario="3-taskB", best=best)
         self.relation_ensemble.build()
 
@@ -576,13 +632,19 @@ class MultiScenarioSKEmsemble(SklearnEnsemble):
 
 
 class MultiSourceEnsemble(PredictiveEnsemble):
-    def __init__(self):
+    def __init__(
+        self, model_type=RandomForestClassifier, model_handler_init=AllInOneModel
+    ):
         super().__init__()
         self.ensembler = None
+        self._model_type = model_type
+        self._model_handler_init = model_handler_init
 
     def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
         super().load(submits, gold, scenario=scenario, best=best)
-        self.ensembler = MultiScenarioSKEmsemble(split=False)
+        self.ensembler = MultiScenarioSKEmsemble(
+            model_type=self._model_type, model_handler_init=self._model_handler_init
+        )
         self.ensembler.load(submits, gold, best=best)
 
     def build(self, ignore=()):
@@ -655,7 +717,7 @@ if __name__ == "__main__":
     pg = Path("./data/testing")
 
     # e = Ensemble()
-    e = BinaryEnsemble()
+    # e = BinaryEnsemble()
     # e = Top(Ensemble(), 1)
     # e = Top(BinaryEnsemble(), 1)
     # e = F1Builder(BinaryEnsemble())
@@ -665,14 +727,17 @@ if __name__ == "__main__":
     # e = GoldSelector(F1Builder(Ensemble()))
     # e = GoldSelector(F1Builder(BinaryEnsemble()))
     # e = SklearnEnsemble()
-    # e = SklearnEnsemble(split=True)
+    # e = SklearnEnsemble(model_handler_init=PerLabelModel)
     # e = IsolatedDualEnsemble()
+    # e = IsolatedDualEnsemble(model_handler_init=PerLabelModel)
     # e = MultiScenarioSKEmsemble()
+    # e = MultiScenarioSKEmsemble(model_handler_init=PerLabelModel)
     # e = MultiSourceEnsemble()
+    # e = MultiSourceEnsemble(model_type=SVC, model_handler_init=PerLabelModel)
     # e = ExploratoryEnsemble(BinaryEnsemble(), 0.5)  # 0.5 ~ F1Builder(BinaryEnsemble())
 
     # e.load(ps, pg, best=True)
-    e.load(ps, pg, best=False)
+    # e.load(ps, pg, best=False)
 
     # e.build()
     # e.make()

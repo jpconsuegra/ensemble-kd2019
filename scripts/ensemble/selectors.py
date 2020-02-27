@@ -112,3 +112,23 @@ def SetParameterAsThreshold(self: Ensemble, thresholds) -> Ensemble:
 
     self._build_table = _build_table
     return self
+
+
+def ScoreLabelUsingTopExperts(self: Ensemble, k: int, merge) -> Ensemble:
+    def _score_label(annotation, label, votes):
+        scores = [self.table[submit, label] for submit in votes]
+        top = sorted(scores, reverse=True)[:k]
+        return merge(top) if top else 0.0
+
+    self._score_label = _score_label
+    return self
+
+
+def ScoreLabelAveragingTopExperts(self: Ensemble, k: int, strict: bool) -> Ensemble:
+    return ScoreLabelUsingTopExperts(
+        self, k, lambda top: sum(top) / (k if strict else len(top))
+    )
+
+
+def ScoreLabelAddingTopExperts(self: Ensemble, k: int) -> Ensemble:
+    return ScoreLabelUsingTopExperts(self, k, lambda top: sum(top))

@@ -84,11 +84,11 @@ class EnsembleChoir:
 
     @classmethod
     def evaluate(cls, submit: Collection, gold: Collection, skipA=False, skipB=False):
-        results = cls._evaluate_scenario(submit, gold, skipA=skipA, skipB=skipB)
+        results = cls.evaluate_scenario(submit, gold, skipA=skipA, skipB=skipB)
         return results["f1"]
 
     @staticmethod
-    def _evaluate_scenario(
+    def evaluate_scenario(
         submit: Collection, gold: Collection, skipA=False, skipB=False
     ):
         resultA = subtaskA(gold, submit)
@@ -322,9 +322,8 @@ class Ensembler:
         to_ensemble = self._orchestrator(choir)
         return self._ensemble(to_ensemble)
 
-    @classmethod
-    def _ensemble(cls, to_ensemble: EnsembledCollection) -> Collection:
-        cls._do_ensemble(to_ensemble)
+    def _ensemble(self, to_ensemble: EnsembledCollection) -> Collection:
+        self._do_ensemble(to_ensemble)
 
         for sentence in to_ensemble.sentences:
             sentence.keyphrases = [
@@ -342,45 +341,37 @@ class Ensembler:
 
         return to_ensemble.collection
 
-    @classmethod
-    def _do_ensemble(cls, to_ensemble: EnsembledCollection):
-        cls._ensemble_annotations(to_ensemble.keyphrase_votes())
-        cls._ensemble_annotations(to_ensemble.relation_votes())
+    def _do_ensemble(self, to_ensemble: EnsembledCollection):
+        self._ensemble_annotations(to_ensemble.keyphrase_votes())
+        self._ensemble_annotations(to_ensemble.relation_votes())
 
-    @classmethod
-    def _ensemble_annotations(cls, annotation_votes):
+    def _ensemble_annotations(self, annotation_votes):
         for sid, ann, votes_per_label in annotation_votes:
-            cls._assign_label(ann, sid, votes_per_label)
+            self._assign_label(ann, sid, votes_per_label)
 
-    @classmethod
-    def _assign_label(cls, annotation, sid: int, votes_per_label: dict):
-        metrics = cls._compute_metrics(annotation, sid, votes_per_label)
-        annotation.label = cls._select_label(annotation, sid, metrics)
+    def _assign_label(self, annotation, sid: int, votes_per_label: dict):
+        metrics = self._compute_metrics(annotation, sid, votes_per_label)
+        annotation.label = self._select_label(annotation, sid, metrics)
 
-    @classmethod
-    def _compute_metrics(cls, annotation, sid: int, votes_per_label: dict) -> dict:
+    def _compute_metrics(self, annotation, sid: int, votes_per_label: dict) -> dict:
         metrics = {}
         for label, votes in votes_per_label.items():
-            metrics[label] = cls._score_label(annotation, sid, label, votes)
+            metrics[label] = self._score_label(annotation, sid, label, votes)
         return metrics
 
-    @classmethod
-    def _score_label(cls, annotation, sid: int, label: str, votes: dict):
+    def _score_label(self, annotation, sid: int, label: str, votes: dict) -> float:
         raise NotImplementedError()
 
-    @classmethod
-    def _select_label(cls, annotation, sid: int, metrics: dict) -> str:
+    def _select_label(self, annotation, sid: int, metrics: dict) -> str:
         if not metrics:
             return None
-        label = cls._best_label(metrics)
-        return cls._validate_label(annotation, sid, label, metrics[label])
+        label = self._best_label(metrics)
+        return self._validate_label(annotation, sid, label, metrics[label])
 
-    @classmethod
-    def _best_label(cls, metrics: dict) -> str:
+    def _best_label(self, metrics: dict) -> str:
         return max(metrics, key=lambda x: metrics[x])
 
-    @classmethod
     def _validate_label(
-        cls, annotation, sid: int, label: str, score: float
+        self, annotation, sid: int, label: str, score: float
     ) -> Optional[str]:
         raise NotImplementedError()

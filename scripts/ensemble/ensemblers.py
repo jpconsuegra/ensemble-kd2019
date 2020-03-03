@@ -9,7 +9,7 @@ from scripts.utils import ENTITIES, RELATIONS, Collection
 # =======================================================================
 
 
-class VotingEnsembler:
+class VotingEnsembler(Ensembler):
     def _do_ensemble(self, to_ensemble: EnsembledCollection):
         self._ensemble_annotations(to_ensemble.keyphrase_votes())
         self._ensemble_annotations(to_ensemble.relation_votes())

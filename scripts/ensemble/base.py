@@ -14,8 +14,13 @@ class EnsembleChoir:
         self.gold: Collection = gold
         self.load_stack = load_stack
 
+    @property
+    def sentences(self):
+        return self.gold.sentences
+
     def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
         self._load_data(submits, gold, scenario=scenario, best=best)
+        return self
 
     def _load_data(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
         self._load_gold(gold, scenario)
@@ -135,7 +140,7 @@ class EnsembledCollection:
     def build(cls, choir):
         collection = Collection([Sentence(s.text) for s in choir.sentences])
         keyphrases, relations = cls._build_votes(choir, collection)
-        return EnsembledCollection(choir, collection, keyphrases, relations)
+        return cls(choir, collection, keyphrases, relations)
 
     @classmethod
     def _build_votes(cls, choir, collection: Collection):
@@ -215,14 +220,14 @@ class EnsembledCollection:
             info[flabel, tlabel][label][name] = 1
 
     def keyphrase_votes(self):
-        return list(self._keyphrase_votes)
+        return list(self._keyphrase_votes())
 
     def _keyphrase_votes(self):
         for (sid, *_), (ann, votes_per_label) in self._keyphrases.items():
             yield sid, ann, votes_per_label
 
     def relation_votes(self):
-        return list(self._relation_votes)
+        return list(self._relation_votes())
 
     def _relation_votes(self):
         for (sid, *_), (ann, per_label_info) in self._relations.items():

@@ -127,6 +127,10 @@ class EnsembledCollection:
     def sentences(self):
         return self._collection.sentences
 
+    @property
+    def choir(self):
+        return self._choir
+
     @classmethod
     def build(cls, choir):
         collection = Collection([Sentence(s.text) for s in choir.sentences])
@@ -141,15 +145,15 @@ class EnsembledCollection:
         for name, submit in choir.submissions.items():
             for sid, sentence in enumerate(submit.sentences):
                 reference = collection.sentences[sid]
-                cls._keyphrase_votes(keyphrases, sentence, reference, name, sid)
-                cls._relation_votes(
+                cls._fill_keyphrase_votes(keyphrases, sentence, reference, name, sid)
+                cls._fill_relation_votes(
                     keyphrases, relations, sentence, reference, name, sid
                 )
 
         return keyphrases, relations
 
     @classmethod
-    def _keyphrase_votes(
+    def _fill_keyphrase_votes(
         cls,
         keyphrases: dict,
         sentence: Sentence,
@@ -176,7 +180,7 @@ class EnsembledCollection:
             info[label][name] = 1
 
     @classmethod
-    def _relation_votes(
+    def _fill_relation_votes(
         cls,
         keyphrases: dict,
         relations: dict,
@@ -211,10 +215,16 @@ class EnsembledCollection:
             info[flabel, tlabel][label][name] = 1
 
     def keyphrase_votes(self):
+        return list(self._keyphrase_votes)
+
+    def _keyphrase_votes(self):
         for (sid, *_), (ann, votes_per_label) in self._keyphrases.items():
             yield sid, ann, votes_per_label
 
     def relation_votes(self):
+        return list(self._relation_votes)
+
+    def _relation_votes(self):
         for (sid, *_), (ann, per_label_info) in self._relations.items():
             try:
                 votes_per_label = per_label_info[
@@ -227,7 +237,7 @@ class EnsembledCollection:
 
 class BinaryEnsembledCollection(EnsembledCollection):
     @classmethod
-    def _keyphrase_votes(
+    def _fill_keyphrase_votes(
         cls,
         keyphrases: dict,
         sentence: Sentence,
@@ -256,7 +266,7 @@ class BinaryEnsembledCollection(EnsembledCollection):
             info[name] = 1
 
     @classmethod
-    def _relation_votes(
+    def _fill_relation_votes(
         cls,
         keyphrases: dict,
         relations: dict,
@@ -290,12 +300,12 @@ class BinaryEnsembledCollection(EnsembledCollection):
 
             info[name] = 1
 
-    def keyphrase_votes(self):
+    def _keyphrase_votes(self):
         for (sid, *_, label), (ann, votes) in self._keyphrases.items():
             assert label == ann.label
             yield sid, ann, {label: votes}
 
-    def relation_votes(self):
+    def _relation_votes(self):
         for (sid, *_, flabel, tlabel, label), (ann, votes) in self._relations.items():
             try:
                 if ann.from_phrase.label == flabel and ann.to_phrase.label == tlabel:
@@ -342,36 +352,4 @@ class Ensembler:
         return to_ensemble.collection
 
     def _do_ensemble(self, to_ensemble: EnsembledCollection):
-        self._ensemble_annotations(to_ensemble.keyphrase_votes())
-        self._ensemble_annotations(to_ensemble.relation_votes())
-
-    def _ensemble_annotations(self, annotation_votes):
-        for sid, ann, votes_per_label in annotation_votes:
-            self._assign_label(ann, sid, votes_per_label)
-
-    def _assign_label(self, annotation, sid: int, votes_per_label: dict):
-        metrics = self._compute_metrics(annotation, sid, votes_per_label)
-        annotation.label = self._select_label(annotation, sid, metrics)
-
-    def _compute_metrics(self, annotation, sid: int, votes_per_label: dict) -> dict:
-        metrics = {}
-        for label, votes in votes_per_label.items():
-            metrics[label] = self._score_label(annotation, sid, label, votes)
-        return metrics
-
-    def _score_label(self, annotation, sid: int, label: str, votes: dict) -> float:
-        raise NotImplementedError()
-
-    def _select_label(self, annotation, sid: int, metrics: dict) -> str:
-        if not metrics:
-            return None
-        label = self._best_label(metrics)
-        return self._validate_label(annotation, sid, label, metrics[label])
-
-    def _best_label(self, metrics: dict) -> str:
-        return max(metrics, key=lambda x: metrics[x])
-
-    def _validate_label(
-        self, annotation, sid: int, label: str, score: float
-    ) -> Optional[str]:
         raise NotImplementedError()

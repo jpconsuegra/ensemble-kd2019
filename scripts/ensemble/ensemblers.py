@@ -1,7 +1,7 @@
 from collections import defaultdict
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
 
-from scripts.ensemble import EnsembleChoir, Ensembler
+from scripts.ensemble import EnsembleChoir, EnsembledCollection, Ensembler
 from scripts.utils import ENTITIES, RELATIONS, Collection
 
 # =======================================================================
@@ -9,7 +9,44 @@ from scripts.utils import ENTITIES, RELATIONS, Collection
 # =======================================================================
 
 
-class VotingEnsembler(Ensembler):
+class VotingEnsembler:
+    def _do_ensemble(self, to_ensemble: EnsembledCollection):
+        self._ensemble_annotations(to_ensemble.keyphrase_votes())
+        self._ensemble_annotations(to_ensemble.relation_votes())
+
+    def _ensemble_annotations(self, annotation_votes):
+        for sid, ann, votes_per_label in annotation_votes:
+            self._assign_label(ann, sid, votes_per_label)
+
+    def _assign_label(self, annotation, sid: int, votes_per_label: dict):
+        metrics = self._compute_metrics(annotation, sid, votes_per_label)
+        annotation.label = self._select_label(annotation, sid, metrics)
+
+    def _compute_metrics(self, annotation, sid: int, votes_per_label: dict) -> dict:
+        metrics = {}
+        for label, votes in votes_per_label.items():
+            metrics[label] = self._score_label(annotation, sid, label, votes)
+        return metrics
+
+    def _score_label(self, annotation, sid: int, label: str, votes: dict) -> float:
+        raise NotImplementedError()
+
+    def _select_label(self, annotation, sid: int, metrics: dict) -> str:
+        if not metrics:
+            return None
+        label = self._best_label(metrics)
+        return self._validate_label(annotation, sid, label, metrics[label])
+
+    def _best_label(self, metrics: dict) -> str:
+        return max(metrics, key=lambda x: metrics[x])
+
+    def _validate_label(
+        self, annotation, sid: int, label: str, score: float
+    ) -> Optional[str]:
+        raise NotImplementedError()
+
+
+class ManualVotingEnsembler(VotingEnsembler):
     def __init__(self, choir, orchestrator, weighter, scorer, validator):
         super().__init__(choir, orchestrator)
         self._weighter = weighter
@@ -217,4 +254,3 @@ class ThresholdValidator(Validator):
 class ConstantThresholdValidator(ThresholdValidator):
     def __init__(self, threshold=0.5):
         super().__init__(thresholds=defaultdict(lambda: threshold))
-

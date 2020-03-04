@@ -9,10 +9,10 @@ STOP = False
 
 
 class EnsembleChoir:
-    def __init__(self, submissions={}, gold: Collection = None, load_stack=[]):
-        self.submissions = submissions
+    def __init__(self, submissions=None, gold: Collection = None, load_stack=None):
+        self.submissions = submissions or {}
         self.gold: Collection = gold
-        self.load_stack = load_stack
+        self.load_stack = load_stack or []
 
     @property
     def sentences(self):

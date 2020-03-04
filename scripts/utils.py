@@ -259,12 +259,19 @@ class Collection:
     def __init__(self, sentences=None):
         self.sentences: List[Sentence] = sentences or []
 
-    def clone(self):
-        return Collection([s.clone() for s in self.sentences])
+    def clone(self, skip_empty=False):
+        return Collection(
+            [s.clone() for s in self.sentences if not skip_empty or s.annotated]
+        )
 
-    def merge(self, *collections: 'Collection'):
-        clone = self.clone()
-        sentences = [s.clone() for c in collections for s in c.sentences]
+    def merge(self, *collections: 'Collection', skip_empty=False):
+        clone = self.clone(skip_empty)
+        sentences = [
+            s.clone()
+            for c in collections
+            for s in c.sentences
+            if not skip_empty or s.annotated
+        ]
         clone.sentences.extend(sentences)
         return clone
 

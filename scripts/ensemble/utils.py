@@ -9,4 +9,4 @@ def keep_top_k_submissions(choir: EnsembleChoir, k) -> EnsembleChoir:
             )
         )[:k]
     )
-    return EnsembleChoir(filtered, choir.gold, choir.load_stack)
+    return EnsembleChoir(filtered, choir.gold)

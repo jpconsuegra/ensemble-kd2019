@@ -9,10 +9,9 @@ STOP = False
 
 
 class EnsembleChoir:
-    def __init__(self, submissions=None, gold: Collection = None, load_stack=None):
+    def __init__(self, submissions=None, gold: Collection = None):
         self.submissions = submissions or {}
         self.gold: Collection = gold
-        self.load_stack = load_stack or []
 
     @property
     def sentences(self):
@@ -30,10 +29,10 @@ class EnsembleChoir:
         number = scenario.split("-")[0]
         gold_input = next(gold.glob(f"scenario{scenario}/*put_scenario{number}.txt"))
         gold_collection = Collection().load(gold_input)
-        self.gold = (
-            gold_collection if self.gold is None else self.gold.merge(gold_collection)
-        )
-        self.load_stack.append(len(gold_collection))
+        self._update_gold(gold_collection)
+
+    def _update_gold(self, gold: Collection):
+        self.gold = gold if self.gold is None else self.gold.merge(gold)
 
     def _load_submissions(self, submits: Path, scenario="1-main", *, best=False):
         if submits is None:
@@ -43,12 +42,14 @@ class EnsembleChoir:
             submit = self._load_user_submit(userfolder, scenario, best=best)
             self._update_submissions(submit)
 
-    def _update_submissions(self, submit):
+    def _update_submissions(self, submit, strict=False):
         for key, value in submit.items():
             try:
                 previous_submit = self.submissions[key]
                 self.submissions[key] = previous_submit.merge(value)
             except KeyError:
+                if strict:
+                    continue
                 self.submissions[key] = value
 
     def _load_user_submit(self, userfolder: Path, scenario="1-main", *, best=False):
@@ -113,6 +114,23 @@ class EnsembleChoir:
         return set(
             i for i, sentence in enumerate(self.gold.sentences) if sentence.annotated
         )
+
+    @staticmethod
+    def merge(*choirs: "EnsembleChoir"):
+        choir = EnsembleChoir()
+        strict = False
+        for other in choirs:
+            choir._update_gold(other.gold)
+            choir._update_submissions(other.submissions, strict=strict)
+            choir.clamp()
+            strict = True
+        return choir
+
+    def clamp(self):
+        keys = list(self.submissions)
+        for k in keys:
+            if len(self.submissions[k]) != len(self.gold):
+                del self.submissions[k]
 
 
 class EnsembledCollection:

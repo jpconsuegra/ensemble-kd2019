@@ -166,6 +166,18 @@ def get_isolated_ensembler(
     return ensembler
 
 
+def get_multisource_ensembler(
+    choir: EnsembleChoir,
+    taskA_choir: EnsembleChoir,
+    taskB_choir: EnsembleChoir,
+    model_type,
+    mode: Literal["category", "all", "each"],
+):
+    taskA_choir = EnsembleChoir.merge(choir, taskA_choir)
+    taskB_choir = EnsembleChoir.merge(choir, taskB_choir)
+    return get_isolated_ensembler(choir, taskA_choir, taskB_choir, model_type, mode)
+
+
 def task_run(ensembler: Ensembler):
     ensembled = ensembler()
     print("==== SCORE ====\n", ensembler.choir.eval(ensembled))
@@ -190,6 +202,13 @@ if __name__ == "__main__":
     #     choir, model_type=RandomForestClassifier, mode="category"
     # )
     # ensembler = get_isolated_ensembler(
+    #     choir,
+    #     taskA_choir,
+    #     taskB_choir,
+    #     model_type=RandomForestClassifier,
+    #     mode="category",
+    # )
+    # ensembler = get_multisource_ensembler(
     #     choir,
     #     taskA_choir,
     #     taskB_choir,

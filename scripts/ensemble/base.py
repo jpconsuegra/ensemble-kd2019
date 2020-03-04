@@ -136,6 +136,9 @@ class EnsembledCollection:
     def choir(self):
         return self._choir
 
+    def eval(self):
+        return self.choir.eval(self._collection)
+
     @classmethod
     def build(cls, choir):
         collection = Collection([Sentence(s.text) for s in choir.sentences])

@@ -1,8 +1,10 @@
 from pathlib import Path
+from statistics import mean, quantiles, stdev, variance
 from typing import Literal
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
+from tqdm import tqdm
 
 from scripts.ensemble import (
     EnsembleChoir,
@@ -33,56 +35,7 @@ from scripts.ensemble.learning import (
 )
 from scripts.ensemble.optimization import optimize_parametric_fn, optimize_sampler_fn
 from scripts.ensemble.utils import keep_top_k_submissions
-
-# from statistics import mean, quantiles, stdev, variance
-
-
-# def validate_model(
-#     submits: Path,
-#     gold: Path,
-#     *,
-#     best=True,
-#     limit=None,
-#     model_type=RandomForestClassifier,
-#     model_handler_init=AllInOneModel,
-# ):
-
-#     ensemble = MultiSourceEnsemble(
-#         model_type=model_type, model_handler_init=model_handler_init
-#     )
-#     ensemble.load(submits, gold, best=best)
-
-#     selected_sids = [
-#         x for x in ensemble.gold_annotated_sid() if x < ensemble.load_stack[0]
-#     ]
-#     if limit is not None:
-#         selected_sids = selected_sids[:limit]
-
-#     with open("log.txt", mode="w") as fd:
-#         scores = []
-
-#         for sid in tqdm(selected_sids):
-#             ensemble.build(ignore=(sid,))
-#             ensemble.make()
-#             ensembled_collection = Collection([ensemble.collection.sentences[sid]])
-#             gold_collection = Collection([ensemble.gold.sentences[sid]])
-#             score = ensemble.evaluate(ensembled_collection, gold_collection)
-#             scores.append(score)
-#             fd.write(f"{sid} -> {score}\n")
-#             fd.flush()
-
-#         return scores
-
-
-# def task_validate(ps, pg, best, model_type):
-#     scores = validate_model(ps, pg, best=best, model_type=model_type)
-#     print("\n".join(str(x) for x in scores))
-#     print("=================================")
-#     print("|= mean ======", mean(scores))
-#     print("|= stdev =====", stdev(scores))
-#     print("|= variance ==", variance(scores))
-#     print("|= quantiles =", quantiles(scores))
-#     print("=================================")
+from scripts.utils import Collection
 
 
 def get_ensembler(choir: EnsembleChoir, binary: bool):
@@ -127,6 +80,7 @@ def get_trained_predictor(
     reference: EnsembledCollection,
     model_type,
     mode: Literal["category", "all", "each"],
+    ignore=(),
 ):
     handler = model_handler_assistant(
         voters=reference.choir.submissions.keys(),
@@ -134,16 +88,21 @@ def get_trained_predictor(
         mode=mode,
     )
 
-    return TrainedPredictor(reference, 0.5, trainer=ModelTrainer(handler))
+    return TrainedPredictor(
+        reference, 0.5, trainer=ModelTrainer(handler), ignore=ignore
+    )
 
 
 def get_sklearn_ensembler(
-    choir: EnsembleChoir, model_type, mode: Literal["category", "all", "each"]
+    choir: EnsembleChoir,
+    model_type,
+    mode: Literal["category", "all", "each"],
+    ignore=(),
 ):
     orchestrator = EnsembleOrchestrator(binary=True)
 
     reference = orchestrator(choir)
-    predictor = get_trained_predictor(reference, model_type, mode)
+    predictor = get_trained_predictor(reference, model_type, mode, ignore=ignore)
 
     ensembler = PredictiveEnsembler(choir, orchestrator, predictor)
     return ensembler
@@ -155,11 +114,16 @@ def get_isolated_ensembler(
     taskB_choir: EnsembleChoir,
     model_type,
     mode: Literal["category", "all", "each"],
+    ignore=(),
 ):
     orchestrator = EnsembleOrchestrator(binary=True)
 
-    taskA_predictor = get_trained_predictor(orchestrator(taskA_choir), model_type, mode)
-    taskB_predictor = get_trained_predictor(orchestrator(taskB_choir), model_type, mode)
+    taskA_predictor = get_trained_predictor(
+        orchestrator(taskA_choir), model_type, mode, ignore=ignore
+    )
+    taskB_predictor = get_trained_predictor(
+        orchestrator(taskB_choir), model_type, mode, ignore=ignore
+    )
     predictor = IsolatedPredictor(taskA_predictor, taskB_predictor)
 
     ensembler = PredictiveEnsembler(choir, orchestrator, predictor)
@@ -181,6 +145,62 @@ def get_multisource_ensembler(
 def task_run(ensembler: Ensembler):
     ensembled = ensembler()
     print("==== SCORE ====\n", ensembler.choir.eval(ensembled))
+
+
+def validate_model(
+    choir: EnsembleChoir,
+    taskA_choir: EnsembleChoir,
+    taskB_choir: EnsembleChoir,
+    model_type,
+    mode: Literal["category", "all", "each"],
+    limit=None,
+):
+    taskA_choir = EnsembleChoir.merge(choir, taskA_choir)
+    taskB_choir = EnsembleChoir.merge(choir, taskB_choir)
+
+    selected_sids = choir.gold_annotated_sid()
+    if limit is not None:
+        selected_sids = list(selected_sids)[:limit]
+
+    with open("log.txt", mode="w") as fd:
+        scores = []
+
+        for sid in tqdm(selected_sids):
+            gold = Collection([choir.gold.sentences[sid]])
+            submissions = {
+                name: Collection([submit.sentences[sid]])
+                for name, submit in choir.submissions.items()
+            }
+            single_choir = EnsembleChoir(submissions, gold)
+
+            ensembler = get_isolated_ensembler(
+                single_choir, taskA_choir, taskB_choir, model_type, mode, ignore=(sid,)
+            )
+            ensembled = ensembler()
+            score = single_choir.eval(ensembled)
+            scores.append(score)
+            fd.write(f"{sid} -> {score}\n")
+            fd.flush()
+
+        return scores
+
+
+def task_validate(
+    choir: EnsembleChoir,
+    taskA_choir: EnsembleChoir,
+    taskB_choir: EnsembleChoir,
+    model_type,
+    mode: Literal["category", "all", "each"],
+    limit=None,
+):
+    scores = validate_model(choir, taskA_choir, taskB_choir, model_type, mode, limit)
+    print("\n".join(str(x) for x in scores))
+    print("=================================")
+    print("|= mean ======", mean(scores))
+    print("|= stdev =====", stdev(scores))
+    print("|= variance ==", variance(scores))
+    print("|= quantiles =", quantiles(scores))
+    print("=================================")
 
 
 if __name__ == "__main__":
@@ -216,16 +236,15 @@ if __name__ == "__main__":
     #     mode="category",
     # )
 
-    # e = SklearnEnsemble()
-    # e = SklearnEnsemble(model_handler_init=PerLabelModel)
-    # e = IsolatedDualEnsemble()
-    # e = IsolatedDualEnsemble(model_handler_init=PerLabelModel)
-    # e = MultiScenarioSKEmsemble()
-    # e = MultiScenarioSKEmsemble(model_handler_init=PerLabelModel)
-    # e = MultiSourceEnsemble()
-    # e = MultiSourceEnsemble(model_type=SVC, model_handler_init=PerLabelModel)
-
     # task_run(ensembler)
     # optimize_parametric_fn(choir, generations=30)
     # optimize_sampler_fn(choir, generations=100, show_model=True)
-    # task_validate(ps, pg, best=False, model_type=AllInOneModel)
+    # task_validate(
+    #     choir,
+    #     taskA_choir,
+    #     taskB_choir,
+    #     model_type=RandomForestClassifier,
+    #     mode="category",
+    #     limit=None,
+    # )
+

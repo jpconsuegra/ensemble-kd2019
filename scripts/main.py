@@ -1,4 +1,8 @@
 from pathlib import Path
+from typing import Literal
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
 
 from scripts.ensemble import EnsembleChoir, EnsembleOrchestrator, Ensembler
 from scripts.ensemble.ensemblers import (
@@ -15,8 +19,14 @@ from scripts.ensemble.ensemblers import (
     ThresholdValidator,
     UniformWeighter,
 )
-from scripts.ensemble.utils import keep_top_k_submissions
+from scripts.ensemble.features import model_handler_assistant
+from scripts.ensemble.learning import (
+    ModelTrainer,
+    PredictiveEnsembler,
+    TrainedPredictor,
+)
 from scripts.ensemble.optimization import optimize_parametric_fn, optimize_sampler_fn
+from scripts.ensemble.utils import keep_top_k_submissions
 
 # from statistics import mean, quantiles, stdev, variance
 
@@ -107,9 +117,27 @@ def get_gold_ensembler(choir: EnsembleChoir, binary: bool):
     return ensembler
 
 
+def get_sklearn_ensembler(
+    choir: EnsembleChoir, model_type, mode: Literal["category", "all", "each"]
+):
+    orchestrator = EnsembleOrchestrator(binary=True)
+
+    handler = model_handler_assistant(
+        voters=choir.submissions.keys(),
+        model_init=lambda: model_type(random_state=0),
+        mode=mode,
+    )
+
+    reference = orchestrator(choir)
+
+    predictor = TrainedPredictor(reference, 0.5, trainer=ModelTrainer(handler))
+    ensembler = PredictiveEnsembler(choir, orchestrator, predictor)
+    return ensembler
+
+
 def task_run(ensembler: Ensembler):
     ensembled = ensembler()
-    print("==== SCORE ====\n", ensembled.choir.eval(ensembled))
+    print("==== SCORE ====\n", ensembler.choir.eval(ensembled))
 
 
 if __name__ == "__main__":
@@ -119,6 +147,9 @@ if __name__ == "__main__":
     choir = EnsembleChoir().load(ps, pg, best=False)
 
     # ensembler = get_f1_ensembler(choir, binary=True)
+    # ensembler = get_sklearn_ensembler(
+    #     choir, model_type=RandomForestClassifier, mode="category"
+    # )
 
     # e = SklearnEnsemble()
     # e = SklearnEnsemble(model_handler_init=PerLabelModel)

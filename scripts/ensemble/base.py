@@ -335,6 +335,10 @@ class Ensembler:
         self._choir = choir
         self._orchestrator = orchestrator
 
+    @property
+    def choir(self):
+        return self._choir
+
     def __call__(self) -> Collection:
         choir = self._choir
         to_ensemble = self._orchestrator(choir)

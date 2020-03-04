@@ -1,8 +1,17 @@
 from collections import defaultdict
+from typing import Any, Dict, List, Literal, Tuple
+
 import numpy as np
 
+from scripts.utils import ENTITIES, RELATIONS
 
-class VotingFeatures:
+
+class FeatureBuilder:
+    def __call__(self, raw_features):
+        raise NotImplementedError()
+
+
+class VotingFeatures(FeatureBuilder):
     def __init__(self, voters):
         self._voters = voters
 
@@ -14,71 +23,148 @@ class VotingFeatures:
         return features
 
 
-class LabelFeatures:
+class LabelFeatures(FeatureBuilder):
     def __init__(self, labels):
-        self._labels = labels
+        self._label2index = {label: i for i, label in enumerate(labels)}
 
     def __call__(self, label):
-        index = self._labels.index(label)
-        features = np.zeros(len(self._labels))
+        features = np.zeros(len(self._label2index))
+        index = self._label2index[label]
         features[index] = 1
         return features
 
 
-class ConcatenatedFeatures:
+class WithHandler(FeatureBuilder):
+    def __init__(self, builder: FeatureBuilder, handler):
+        self._builder = builder
+        self._handler = handler
+
+    def __call__(self, raw_features):
+        return self._builder(self._handler(raw_features))
+
+
+class ConcatenatedFeatures(FeatureBuilder):
     def __init__(self, *builders_and_handlers):
-        self._builders_and_handlers = builders_and_handlers
+        self._builders = [
+            WithHandler(builder=b, handler=h) for b, h in builders_and_handlers
+        ]
 
-    def __call__(self, item):
-        return np.concatenate(
-            [builder(handler(item)) for builder, handler in self._builders_and_handlers]
+    def __call__(self, raw_features):
+        return np.concatenate([builder(raw_features) for builder in self._builders])
+
+
+class ModelHandler:
+    def __call__(
+        self, annotation_votes, selected_sids=None
+    ) -> Dict[str, Tuple[Any, List[int], List[Any], List[str], np.ndarray]]:
+        pass
+
+
+class PerCategoryModel(ModelHandler):
+    def __init__(self, *, voters, labels_per_category: Dict[str, list], model_init):
+        self._builders = {
+            category: self._get_builder_according_to_labels(labels, voters)
+            for category, labels in labels_per_category.items()
+        }
+        self._models = {category: model_init() for category in labels_per_category}
+        self._label2category = {
+            label: category
+            for category, labels in labels_per_category.items()
+            for label in labels
+        }
+        assert sum(len(x) for x in labels_per_category.values()) == len(
+            self._label2category
         )
 
+    @classmethod
+    def _get_builder_according_to_labels(cls, labels, voters):
+        if len(labels) > 1:
+            return ConcatenatedFeatures(
+                (LabelFeatures(labels), cls._get_label),
+                (VotingFeatures(voters), cls._get_votes),
+            )
+        else:
+            return WithHandler(VotingFeatures(voters), cls._get_votes)
 
-class AllInOneModel:
-    def __init__(self, *, voters, labels, model_init):
-        self._builder = ConcatenatedFeatures(
-            (LabelFeatures(labels), self._get_label),
-            (VotingFeatures(voters), self._get_votes),
-        )
-        self._model = model_init()
+    @classmethod
+    def _get_label(cls, item):
+        label, _ = item
+        return label
 
-    def _get_label(self, item):
-        ann, _ = item
-        return ann.label
-
-    def _get_votes(self, item):
+    @classmethod
+    def _get_votes(cls, item):
         _, votes = item
         return votes
 
-    def __call__(self, annotations, selected_sids=None):
-        sids = []
-        anns = []
-        features = []
-        for (sid, *_), (ann, votes) in annotations.items():
+    def __call__(self, annotation_votes, selected_sids=None):
+        per_category = defaultdict(lambda: ([], [], [], []))
+        for sid, ann, votes_per_label in annotation_votes:
             if selected_sids is None or sid in selected_sids:
-                features.append(self._builder((ann, votes)))
-                sids.append(sid)
-                anns.append(ann)
-        return [("all", self._model, sids, anns, np.asarray(features))]
+                # TODO: en el caso no binario estoy no hace lo esperado
+                for label, votes in votes_per_label.items():
+                    if label not in self._label2category:
+                        print(f"Ignoring {ann} with label {label}.")
+                        continue
+
+                    category = self._label2category[label]
+                    builder = self._builders[category]
+                    sids, anns, labels, features = per_category[category]
+
+                    features.append(builder((label, votes)))
+                    sids.append(sid)
+                    anns.append(ann)
+                    labels.append(label)
+
+        return {
+            category: (self._models[category], sids, anns, labels, np.asarray(features))
+            for category, (sids, anns, labels, features) in per_category.items()
+        }
 
 
-class PerLabelModel:
+class AllInOneModel(PerCategoryModel):
     def __init__(self, *, voters, labels, model_init):
-        self._builder = VotingFeatures(voters)
-        self._models = {label: model_init() for label in labels}
+        super().__init__(
+            voters=voters, labels_per_category={"all": labels}, model_init=model_init
+        )
 
-    def __call__(self, annotations, selected_sids=None):
-        per_label = defaultdict(lambda: ([], [], []))
-        for (sid, *_), (ann, votes) in annotations.items():
-            if selected_sids is None or sid in selected_sids:
-                sids, anns, features = per_label[ann.label]
 
-                features.append(self._builder(votes))
-                sids.append(sid)
-                anns.append(ann)
+class PerLabelModel(PerCategoryModel):
+    def __init__(self, *, voters, labels, model_init):
+        super().__init__(
+            voters=voters,
+            labels_per_category={l: [l] for l in labels},
+            model_init=model_init,
+        )
 
-        return [
-            (label, self._models[label], sids, anns, np.asarray(features))
-            for label, (sids, anns, features) in per_label.items()
-        ]
+
+def model_handler_assistant(
+    *,
+    voters,
+    model_init,
+    labels=ENTITIES + RELATIONS,
+    mode: Literal["category", "all", "each"],
+):
+    if mode == "category":
+        labels_per_category = defaultdict(list)
+        for label in labels:
+            if label in ENTITIES:
+                labels_per_category["ENTITIES"].append(label)
+            elif label in RELATIONS:
+                labels_per_category["RELATIONS"].append(label)
+            else:
+                raise Exception("Unknown category!")
+        return lambda: PerCategoryModel(
+            voters=voters,
+            labels_per_category=labels_per_category,
+            model_init=model_init,
+        )
+    elif mode == "all":
+        return lambda: AllInOneModel(
+            voters=voters, labels=labels, model_init=model_init
+        )
+    elif mode == "each":
+        return lambda: PerLabelModel(
+            voters=voters, labels=labels, model_init=model_init
+        )
+    else:
+        raise ValueError("Unknown mode: {mode}")

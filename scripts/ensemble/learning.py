@@ -97,3 +97,19 @@ class PredictiveEnsembler(Ensembler):
     def _do_prediction(self, annotation_votes, task):
         for ann, label in self._predictor(annotation_votes, task):
             ann.label = label
+
+
+class IsolatedPredictor(Predictor):
+    def __init__(
+        self, taskA_predictor: TrainedPredictor, taskB_predictor: TrainedPredictor,
+    ):
+        self._taskA_predictor = taskA_predictor
+        self._taskB_predictor = taskB_predictor
+
+    def __call__(self, annotation_votes, task):
+        if task == "A":
+            yield from self._taskA_predictor(annotation_votes, task)
+        elif task == "B":
+            yield from self._taskB_predictor(annotation_votes, task)
+        else:
+            raise ValueError("Unknown task!")

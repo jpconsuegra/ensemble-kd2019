@@ -4,7 +4,12 @@ from typing import Literal
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 
-from scripts.ensemble import EnsembleChoir, EnsembleOrchestrator, Ensembler
+from scripts.ensemble import (
+    EnsembleChoir,
+    EnsembledCollection,
+    EnsembleOrchestrator,
+    Ensembler,
+)
 from scripts.ensemble.ensemblers import (
     AggregateTopScorer,
     AverageScorer,
@@ -21,6 +26,7 @@ from scripts.ensemble.ensemblers import (
 )
 from scripts.ensemble.features import model_handler_assistant
 from scripts.ensemble.learning import (
+    IsolatedPredictor,
     ModelTrainer,
     PredictiveEnsembler,
     TrainedPredictor,
@@ -117,20 +123,45 @@ def get_gold_ensembler(choir: EnsembleChoir, binary: bool):
     return ensembler
 
 
+def get_trained_predictor(
+    reference: EnsembledCollection,
+    model_type,
+    mode: Literal["category", "all", "each"],
+):
+    handler = model_handler_assistant(
+        voters=reference.choir.submissions.keys(),
+        model_init=lambda: model_type(random_state=0),
+        mode=mode,
+    )
+
+    return TrainedPredictor(reference, 0.5, trainer=ModelTrainer(handler))
+
+
 def get_sklearn_ensembler(
     choir: EnsembleChoir, model_type, mode: Literal["category", "all", "each"]
 ):
     orchestrator = EnsembleOrchestrator(binary=True)
 
-    handler = model_handler_assistant(
-        voters=choir.submissions.keys(),
-        model_init=lambda: model_type(random_state=0),
-        mode=mode,
-    )
-
     reference = orchestrator(choir)
+    predictor = get_trained_predictor(reference, model_type, mode)
 
-    predictor = TrainedPredictor(reference, 0.5, trainer=ModelTrainer(handler))
+    ensembler = PredictiveEnsembler(choir, orchestrator, predictor)
+    return ensembler
+
+
+def get_isolated_ensembler(
+    choir: EnsembleChoir,
+    taskA_choir: EnsembleChoir,
+    taskB_choir: EnsembleChoir,
+    model_type,
+    mode: Literal["category", "all", "each"],
+):
+    orchestrator = EnsembleOrchestrator(binary=True)
+
+    taskA_predictor = get_trained_predictor(orchestrator(taskA_choir), model_type, mode)
+    taskB_predictor = get_trained_predictor(orchestrator(taskB_choir), model_type, mode)
+    predictor = IsolatedPredictor(taskA_predictor, taskB_predictor)
+
     ensembler = PredictiveEnsembler(choir, orchestrator, predictor)
     return ensembler
 
@@ -144,11 +175,26 @@ if __name__ == "__main__":
 
     ps = Path("./data/submissions/all")
     pg = Path("./data/testing")
-    choir = EnsembleChoir().load(ps, pg, best=False)
+    best = False
+
+    print("======== Loading ... scenario1 ==============")
+    choir = EnsembleChoir().load(ps, pg, best=best)
+    print("======== Loading ... scenario2 ==============")
+    taskA_choir = EnsembleChoir().load(ps, pg, scenario="2-taskA", best=best)
+    print("======== Loading ... scenario3 ==============")
+    taskB_choir = EnsembleChoir().load(ps, pg, scenario="3-taskB", best=best)
+    print("======== Done! ==============================")
 
     # ensembler = get_f1_ensembler(choir, binary=True)
     # ensembler = get_sklearn_ensembler(
     #     choir, model_type=RandomForestClassifier, mode="category"
+    # )
+    # ensembler = get_isolated_ensembler(
+    #     choir,
+    #     taskA_choir,
+    #     taskB_choir,
+    #     model_type=RandomForestClassifier,
+    #     mode="category",
     # )
 
     # e = SklearnEnsemble()

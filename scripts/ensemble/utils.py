@@ -10,3 +10,11 @@ def keep_top_k_submissions(choir: EnsembleChoir, k) -> EnsembleChoir:
         )[:k]
     )
     return EnsembleChoir(filtered, choir.gold)
+
+
+def keep_named_submissions(choir: EnsembleChoir, names) -> EnsembleChoir:
+    filtered = {
+        name: submit for name, submit in choir.submissions.items() if name in names
+    }
+    return EnsembleChoir(filtered, choir.gold)
+

@@ -3,6 +3,7 @@ from statistics import mean, quantiles, stdev, variance
 from typing import Literal
 
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from tqdm import tqdm
 
@@ -33,7 +34,7 @@ from scripts.ensemble.learning import (
     PredictiveEnsembler,
     TrainedPredictor,
 )
-from scripts.ensemble.optimization import optimize_parametric_fn, optimize_sampler_fn
+from scripts.ensemble.optimization import optimize_sampler_fn
 from scripts.ensemble.utils import keep_top_k_submissions
 from scripts.utils import Collection
 
@@ -235,10 +236,12 @@ if __name__ == "__main__":
     #     model_type=RandomForestClassifier,
     #     mode="category",
     # )
+    # ensembler = get_multisource_ensembler(
+    #     choir, taskA_choir, taskB_choir, model_type=LogisticRegression, mode="each"
+    # )  # 0.6611026808295397
 
     # task_run(ensembler)
-    # optimize_parametric_fn(choir, generations=30)
-    # optimize_sampler_fn(choir, generations=500, pop_size=10, show_model=True)
+    # optimize_sampler_fn(choir, generations=500, pop_size=10)
     # task_validate(
     #     choir,
     #     taskA_choir,

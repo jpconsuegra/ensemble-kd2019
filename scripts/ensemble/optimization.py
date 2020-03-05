@@ -43,31 +43,49 @@ class LogSampler:
         self._sampler = sampler
         self._log = []
 
-    def _log_sample(self, handle, value):
+    def _log_sample(self, handle, value, log=True):
         result = value
-        if handle is None:
-            handle, value = value, True
-        self._log.append((handle, value))
+        if log:
+            if handle is None:
+                handle, value = value, True
+            self._log.append((handle, value))
         return result
 
-    def boolean(self, handle=None) -> bool:
+    def boolean(self, handle=None, log=True) -> bool:
         value = self._sampler.boolean(handle)
-        return self._log_sample(handle, value)
+        return self._log_sample(handle, value, log=log)
 
-    def categorical(self, options, handle=None):
+    def categorical(self, options, handle=None, log=True):
         value = self._sampler.categorical(options, handle)
-        return self._log_sample(handle, value)
+        return self._log_sample(handle, value, log=log)
 
-    def choice(self, options, handle=None):
+    def choice(self, options, handle=None, log=True):
         value = self._sampler.choice(options, handle)
-        return self._log_sample(handle, value)
+        return self._log_sample(handle, value, log=log)
 
-    def continuous(self, min=0, max=1, handle=None) -> float:
+    def continuous(self, min=0, max=1, handle=None, log=True) -> float:
         value = self._sampler.continuous(min, max, handle)
-        return self._log_sample(handle, value)
+        return self._log_sample(handle, value, log=log)
 
-    def discrete(self, min=0, max=10, handle=None) -> int:
-        return self._log_sample(handle, self._sampler.discrete(min, max, handle))
+    def discrete(self, min=0, max=10, handle=None, log=True) -> int:
+        value = self._sampler.discrete(min, max, handle)
+        return self._log_sample(handle, value, log=log)
+
+    def multichoice(self, options, k, handle=None, log=True):
+        values = []
+        candidates = list(options)
+        for _ in range(k):
+            value = self._sampler.choice(candidates)
+            candidates.remove(value)
+            values.append(value)
+        return self._log_sample(handle, values, log=log)
+
+    def multisample(self, labels, func, handle=None, log=True, **kargs):
+        values = {
+            label: func(handle=f"{handle}-{label}", log=False, **kargs)
+            for label in labels
+        }
+        return self._log_sample(handle, values, log=log)
 
     def __iter__(self):
         return iter(self._log)
@@ -110,12 +128,9 @@ def build_generator_and_fn(choir: EnsembleChoir):
             training_choir = keep_top_k_submissions(choir, n_submits)
         else:
             n_submits = sampler.discrete(1, len(choir.submissions), "n-submits")
-            submissions = []
-            candidates = list(choir.submissions.keys())
-            for _ in range(n_submits):
-                submit = sampler.choice(candidates)
-                submissions.append(submit)
-                candidates.remove(submit)
+            submissions = sampler.multichoice(
+                choir.submissions.keys(), n_submits, "submissions"
+            )
             training_choir = keep_named_submissions(choir, submissions)
 
         # ---- WEIGHTER -------------------------------------------------
@@ -154,10 +169,13 @@ def build_generator_and_fn(choir: EnsembleChoir):
         if validator == "non-zero":
             validator = NonZeroValidator()
         elif validator == "threshold":
-            thresholds = {
-                label: sampler.continuous(0, 1, f"threshold-{label}")
-                for label in ENTITIES + RELATIONS
-            }
+            thresholds = sampler.multisample(
+                ENTITIES + RELATIONS,
+                sampler.continuous,
+                handle="thresholds",
+                min=0,
+                max=1,
+            )
             validator = ThresholdValidator(thresholds)
         elif validator == "constant":
             threshold = sampler.continuous(0, 1, "threshold")
@@ -191,4 +209,4 @@ def optimize_sampler_fn(choir: EnsembleChoir, generations, pop_size):
     )
     loggers = [ProgressLogger(), ConsoleLogger()]
     best, best_fn = search.run(generations=generations, logger=loggers)
-    print(best, best_fn)
+    return best, best_fn

@@ -332,7 +332,7 @@ def optimize_parametric_fn(choir: EnsembleChoir, generations):
     print(optimize(fn, allow_duplicates=False, logger=loggers, generations=generations))
 
 
-def optimize_sampler_fn(choir: EnsembleChoir, generations, show_model=True):
+def optimize_sampler_fn(choir: EnsembleChoir, generations, pop_size, show_model=True):
     if show_model:
         generator, fn = build_generator_and_fn(choir)
         search = PESearch(
@@ -341,11 +341,16 @@ def optimize_sampler_fn(choir: EnsembleChoir, generations, show_model=True):
             evaluation_timeout=0,
             memory_limit=0,
             allow_duplicates=False,
+            pop_size=pop_size,
         )
     else:
         fn = build_sampler_fn(choir)
         search = PESearch(
-            fitness_fn=fn, evaluation_timeout=0, memory_limit=0, allow_duplicates=True
+            fitness_fn=fn,
+            evaluation_timeout=0,
+            memory_limit=0,
+            allow_duplicates=True,
+            pop_size=pop_size,
         )
     loggers = [ProgressLogger(), ConsoleLogger()]
     best, best_fn = search.run(generations=generations, logger=loggers)

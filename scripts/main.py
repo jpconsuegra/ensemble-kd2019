@@ -238,7 +238,7 @@ if __name__ == "__main__":
 
     # task_run(ensembler)
     # optimize_parametric_fn(choir, generations=30)
-    # optimize_sampler_fn(choir, generations=100, show_model=True)
+    # optimize_sampler_fn(choir, generations=500, pop_size=10, show_model=True)
     # task_validate(
     #     choir,
     #     taskA_choir,

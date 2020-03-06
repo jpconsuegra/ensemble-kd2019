@@ -248,9 +248,15 @@ class ThresholdValidator(Validator):
         self._thresholds = thresholds
 
     def __call__(self, annotation, sid: int, label: str, score: float) -> Optional[str]:
-        return label if score >= self._thresholds[label] else None
+        return label if score > self._thresholds[label] else None
 
 
 class ConstantThresholdValidator(ThresholdValidator):
     def __init__(self, threshold=0.5):
         super().__init__(thresholds=defaultdict(lambda: threshold))
+
+
+class MajorityValidator(ConstantThresholdValidator):
+    def __init__(self, n_submits):
+        super().__init__(threshold=n_submits // 2)
+

@@ -186,10 +186,11 @@ class AggregateTopScorer(TopScorer):
 
 
 class ExpertScorer(Scorer):
-    def __init__(self, weighter, choir: EnsembleChoir):
+    def __init__(self, weighter, choir: EnsembleChoir, discrete: bool):
         super().__init__()
         self._weighter = weighter
         self._choir = choir
+        self._discrete = discrete
 
     @property
     def weight(self):
@@ -201,7 +202,11 @@ class ExpertScorer(Scorer):
         best = max(
             self.weight(label, sid, submit) for submit in self._choir.submissions
         )
-        return float(any(x for x in weights.values() if x >= best))
+        return (
+            (1.0 if self._discrete else best)
+            if any(x for x in weights.values() if x >= best)
+            else 0.0
+        )
 
 
 class GoldOracleScorer(Scorer):

@@ -59,7 +59,7 @@ def get_f1_ensembler(choir: EnsembleChoir, binary: bool):
     orchestrator = EnsembleOrchestrator(binary=binary)
 
     weighter = F1Weighter.build(choir)
-    scorer = ExpertScorer(weighter, choir)
+    scorer = ExpertScorer(weighter, choir, discrete=True)
     validator = NonZeroValidator()
 
     ensembler = ManualVotingEnsembler(choir, orchestrator, weighter, scorer, validator)

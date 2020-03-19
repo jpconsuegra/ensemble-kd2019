@@ -162,7 +162,8 @@ def build_generator_and_fn(choir: EnsembleChoir):
         if _scorer == "avg":
             scorer = AverageScorer()
         elif _scorer == "expert":
-            scorer = ExpertScorer(weighter, train_choir)
+            discrete = sampler.boolean("discrete-expert")
+            scorer = ExpertScorer(weighter, train_choir, discrete)
         elif _scorer == "max":
             scorer = MaxScorer()
         elif _scorer == "avg-top":

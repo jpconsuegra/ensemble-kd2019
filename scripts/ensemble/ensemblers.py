@@ -154,6 +154,13 @@ class AverageScorer(Scorer):
         return sum(weights.values()) / len(weights)
 
 
+class SumScorer(Scorer):
+    def __call__(
+        self, weights: Dict[str, float], annotation, sid: int, label: str
+    ) -> float:
+        return sum(weights.values())
+
+
 class MaxScorer(Scorer):
     def __call__(
         self, weights: Dict[str, float], annotation, sid: int, label: str

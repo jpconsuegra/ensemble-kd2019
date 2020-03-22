@@ -19,6 +19,7 @@ from scripts.ensemble.ensemblers import (
     ManualVotingEnsembler,
     MaxScorer,
     NonZeroValidator,
+    SumScorer,
     ThresholdValidator,
     UniformWeighter,
 )
@@ -157,10 +158,12 @@ def build_generator_and_fn(choir: EnsembleChoir):
 
         # ---- SCORER ---------------------------------------------------
         _scorer = sampler.categorical(
-            ["avg", "expert", "max", "avg-top", "sum-top"], "scorer"
+            ["avg", "sum", "expert", "max", "avg-top", "sum-top"], "scorer"
         )
         if _scorer == "avg":
             scorer = AverageScorer()
+        elif _scorer == "sum":
+            scorer = SumScorer()
         elif _scorer == "expert":
             discrete = sampler.boolean("discrete-expert")
             scorer = ExpertScorer(weighter, train_choir, discrete)

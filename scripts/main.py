@@ -21,9 +21,11 @@ from scripts.ensemble.ensemblers import (
     ExpertScorer,
     F1Weighter,
     GoldOracleScorer,
+    MajorityValidator,
     ManualVotingEnsembler,
     MaxScorer,
     NonZeroValidator,
+    SumScorer,
     ThresholdValidator,
     UniformWeighter,
 )
@@ -37,6 +39,17 @@ from scripts.ensemble.learning import (
 from scripts.ensemble.optimization import optimize_sampler_fn
 from scripts.ensemble.utils import keep_top_k_submissions
 from scripts.utils import Collection
+
+
+def get_majority_ensembler(choir: EnsembleChoir, binary: bool):
+    orchestrator = EnsembleOrchestrator(binary=binary)
+
+    weighter = UniformWeighter.build()
+    scorer = SumScorer()
+    validator = MajorityValidator(len(choir.submissions))
+
+    ensembler = ManualVotingEnsembler(choir, orchestrator, weighter, scorer, validator)
+    return ensembler
 
 
 def get_ensembler(choir: EnsembleChoir, binary: bool):
@@ -218,6 +231,7 @@ if __name__ == "__main__":
     taskB_choir = EnsembleChoir().load(ps, pg, scenario="3-taskB", best=best)
     print("======== Done! ==============================")
 
+    # ensembler = get_majority_ensembler(choir, binary=True)
     # ensembler = get_f1_ensembler(choir, binary=True)
     # ensembler = get_sklearn_ensembler(
     #     choir, model_type=RandomForestClassifier, mode="category"

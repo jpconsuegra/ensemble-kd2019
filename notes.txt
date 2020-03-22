@@ -12,3 +12,20 @@ Gold-Binary-All 0.8726765799256506
 
 Sklearn-Split 0.6773031394750385
 Sklearn-No-Split 0.701067615658363
+
+MultiSource-All-RandomForest 0.736426456071076
+MultiSource-All-SVC 0.678
+MultiSource-CrossVal-RandomForest 0.643228856842103
+MultiSource-CrossVal-SVC 0.651836695061918
+
+Evaluating pipeline:
+{
+    binary: True,
+    load-best: True,
+    top-best: True,
+    top-submits: 6,
+    weighter: f1,
+    scorer: expert,
+    validator: non-zero
+}
+Fitness=0.666

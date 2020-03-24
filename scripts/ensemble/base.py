@@ -1,3 +1,4 @@
+import warnings
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional
@@ -16,6 +17,10 @@ class EnsembleChoir:
     @property
     def sentences(self):
         return self.gold.sentences
+
+    @property
+    def gold_annotated(self):
+        return Collection([s for s in self.gold.sentences if s.annotated])
 
     def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
         self._load_data(submits, gold, scenario=scenario, best=best)
@@ -89,7 +94,21 @@ class EnsembleChoir:
         return self.evaluate(submit, self.gold)
 
     @classmethod
-    def evaluate(cls, submit: Collection, gold: Collection, skipA=False, skipB=False):
+    def evaluate(
+        cls, submit: Collection, gold: Collection, skipA=False, skipB=False, clamp=False
+    ):
+        if clamp:
+            sentences = []
+            for gold_sent in gold.sentences:
+                for s in submit.sentences:
+                    if s.text == gold_sent.text:
+                        sentences.append(s)
+                        break
+                else:
+                    warnings.warn("Sentence not found!")
+                    sentences.append(Sentence(gold_sent.text))
+            submit = Collection(sentences)
+
         results = cls.evaluate_scenario(submit, gold, skipA=skipA, skipB=skipB)
         return results["f1"]
 

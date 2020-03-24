@@ -28,7 +28,7 @@ from scripts.ensemble.utils import (
     keep_named_submissions,
     keep_top_k_submissions,
 )
-from scripts.utils import ENTITIES, RELATIONS
+from scripts.utils import ENTITIES, RELATIONS, Collection
 
 
 class Cache:
@@ -116,7 +116,9 @@ class SampleModel:
         return repr(self.sampler)
 
 
-def build_generator_and_fn(choir: EnsembleChoir):
+def build_generator_and_fn(choir: EnsembleChoir, gold: Collection = None):
+    if gold is None:
+        gold = choir.gold
 
     print("======== Caching ... F1Weighter =============")
     cached_f1_weighter = F1Weighter.build(choir)
@@ -224,13 +226,13 @@ def build_generator_and_fn(choir: EnsembleChoir):
     def fn(generated: SampleModel):
         ensembler = generated.model
         ensembled = ensembler()
-        return choir.eval(ensembled)
+        return EnsembleChoir.evaluate(ensembled, gold, clamp=True)
 
     return generator, fn
 
 
-def optimize_sampler_fn(choir: EnsembleChoir, generations, pop_size):
-    generator, fn = build_generator_and_fn(choir)
+def optimize_sampler_fn(choir: EnsembleChoir, gold: Collection, generations, pop_size):
+    generator, fn = build_generator_and_fn(choir, gold)
     search = PESearch(
         generator_fn=generator,
         fitness_fn=fn,

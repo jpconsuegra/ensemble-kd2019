@@ -37,7 +37,8 @@ from scripts.ensemble.learning import (
     TrainedPredictor,
 )
 from scripts.ensemble.optimization import optimize_sampler_fn
-from scripts.ensemble.utils import keep_top_k_submissions
+from scripts.ensemble.utils import keep_best_per_participant, keep_top_k_submissions
+from scripts.futils import Collection as FutureCollection
 from scripts.utils import Collection
 
 
@@ -68,7 +69,10 @@ def get_ensembler_with_top(choir: EnsembleChoir, k: int, binary: bool):
     return get_ensembler(choir, binary=binary)
 
 
-def get_f1_ensembler(choir: EnsembleChoir, binary: bool):
+def get_f1_ensembler(choir: EnsembleChoir, binary: bool, best: bool, top=None):
+    choir = keep_best_per_participant(choir) if best else choir
+    choir = keep_top_k_submissions(choir, top) if top is not None else choir
+
     orchestrator = EnsembleOrchestrator(binary=binary)
 
     weighter = F1Weighter.build(choir)
@@ -156,9 +160,10 @@ def get_multisource_ensembler(
     return get_isolated_ensembler(choir, taskA_choir, taskB_choir, model_type, mode)
 
 
-def task_run(ensembler: Ensembler):
+def task_run(ensembler: Ensembler, gold=None):
+    gold = gold or ensembler.choir.gold
     ensembled = ensembler()
-    print("==== SCORE ====\n", ensembler.choir.eval(ensembled))
+    print("==== SCORE ====\n", EnsembleChoir.evaluate(ensembled, gold, clamp=True))
 
 
 def validate_model(
@@ -199,7 +204,7 @@ def validate_model(
         return scores
 
 
-def task_validate(
+def task_cross_validate(
     choir: EnsembleChoir,
     taskA_choir: EnsembleChoir,
     taskB_choir: EnsembleChoir,
@@ -217,22 +222,39 @@ def task_validate(
     print("=================================")
 
 
+def task_validate_submission(choir: EnsembleChoir, name: str, gold: FutureCollection):
+    choir = keep_best_per_participant(choir)
+    submissions = [
+        s for sname, s in choir.submissions.items() if sname.split("/")[0] == name
+    ]
+    assert len(submissions) == 1
+    submit = submissions[0]
+    print("==== SCORE ====\n", EnsembleChoir.evaluate(submit, gold, clamp=True))
+
+
 if __name__ == "__main__":
 
-    ps = Path("./data/submissions/all")
-    pg = Path("./data/testing")
-    best = False
+    path2subs = Path("./data/submissions/all")
+    path2refs = Path("./data/ehealth2019-testing")
+    path2vals = Path("./data/ehealth2020-gold")
 
     print("======== Loading ... scenario1 ==============")
-    choir = EnsembleChoir().load(ps, pg, best=best)
+    main_choir = EnsembleChoir().load(path2subs, path2refs)
     print("======== Loading ... scenario2 ==============")
-    taskA_choir = EnsembleChoir().load(ps, pg, scenario="2-taskA", best=best)
+    taskA_choir = EnsembleChoir().load(path2subs, path2refs, scenario="2-taskA")
     print("======== Loading ... scenario3 ==============")
-    taskB_choir = EnsembleChoir().load(ps, pg, scenario="3-taskB", best=best)
+    taskB_choir = EnsembleChoir().load(path2subs, path2refs, scenario="3-taskB")
+    print("======== Done! ==============================")
+
+    choir = main_choir
+    # choir = EnsembleChoir.merge(main_choir, taskA_choir, taskB_choir)
+
+    print("======== Loading ... validation =============")
+    gold = FutureCollection().load_dir(path2vals, attributes=False)
     print("======== Done! ==============================")
 
     # ensembler = get_majority_ensembler(choir, binary=True)
-    # ensembler = get_f1_ensembler(choir, binary=True)
+    # ensembler = get_f1_ensembler(choir, binary=True, best=True, top=6)
     # ensembler = get_sklearn_ensembler(
     #     choir, model_type=RandomForestClassifier, mode="category"
     # )
@@ -244,19 +266,17 @@ if __name__ == "__main__":
     #     mode="category",
     # )
     # ensembler = get_multisource_ensembler(
-    #     choir,
-    #     taskA_choir,
-    #     taskB_choir,
-    #     model_type=RandomForestClassifier,
-    #     mode="category",
+    #     choir, taskA_choir, taskB_choir, model_type=SVC, mode="category",
     # )
     # ensembler = get_multisource_ensembler(
     #     choir, taskA_choir, taskB_choir, model_type=LogisticRegression, mode="each"
     # )  # 0.6611026808295397
 
-    # task_run(ensembler)
-    # optimize_sampler_fn(choir, generations=500, pop_size=10)
-    # task_validate(
+    # task_run(ensembler, main_choir.gold_annotated)
+    # task_run(ensembler, gold)
+    # task_validate_submission(choir, 'talp', gold)
+    # optimize_sampler_fn(choir, main_choir.gold_annotated, generations=500, pop_size=10)
+    # task_cross_validate(
     #     choir,
     #     taskA_choir,
     #     taskB_choir,
@@ -265,3 +285,4 @@ if __name__ == "__main__":
     #     limit=None,
     # )
 
+# TODO: hacer voting ensemble pero usando tambien informacion de los otros 2 scenarios (eso solo es importante para el F1)

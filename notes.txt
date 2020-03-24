@@ -13,8 +13,16 @@ Gold-Binary-All 0.8726765799256506
 Sklearn-Split 0.6773031394750385
 Sklearn-No-Split 0.701067615658363
 
-MultiSource-All-RandomForest 0.736426456071076
-MultiSource-All-SVC 0.678
+Learning-All-RandomForest 0.7340897878638382
+Learning-All-SVC 0.6756352765321375
+Learning-Per-Category-RandomForest 0.7349753694581281
+Learning-Per-Category-SVC 0.6799800299550675
+Learning-Per-Label-RandomForest 0.7345831277750371
+Learning-Per-Label-SVC 0.6837606837606838
+Learning-Per-Label-LogisticRegression 0.6611026808295397
+
+--- MultiSource-All-RandomForest 0.736426456071076
+--- MultiSource-All-SVC 0.678
 MultiSource-CrossVal-RandomForest 0.643228856842103
 MultiSource-CrossVal-SVC 0.651836695061918
 

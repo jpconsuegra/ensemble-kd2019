@@ -68,7 +68,7 @@ class TrainedPredictor(Predictor):
         self.model: ModelHandler = trainer(
             reference_collection.choir,
             reference_collection.keyphrase_votes()
-            + reference_collection.relation_votes(),
+            + reference_collection.relation_votes(False),
             ignore=ignore,
         )
 

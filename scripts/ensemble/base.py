@@ -244,20 +244,20 @@ class EnsembledCollection:
             label = relation.label
 
             try:
-                rel, info = relations[sid, fspans, tspans]
+                rel, info = relations[sid, fspans, tspans, flabel, tlabel]
             except KeyError:
-                rel, info = relations[sid, fspans, tspans] = (
+                rel, info = relations[sid, fspans, tspans, flabel, tlabel] = (
                     Relation(
                         sentence=reference,
                         origin=keyphrases[sid, fspans][0].id,
                         destination=keyphrases[sid, tspans][0].id,
                         label=None,
                     ),
-                    defaultdict(lambda: defaultdict(dict)),
+                    defaultdict(dict),
                 )
                 reference.relations.append(rel)
 
-            info[flabel, tlabel][label][name] = 1
+            info[label][name] = 1
 
     def keyphrase_votes(self):
         return list(self._keyphrase_votes())
@@ -266,17 +266,22 @@ class EnsembledCollection:
         for (sid, *_), (ann, votes_per_label) in self._keyphrases.items():
             yield sid, ann, votes_per_label
 
-    def relation_votes(self):
-        return list(self._relation_votes())
+    def relation_votes(self, only_valid=True):
+        return list(self._relation_votes(only_valid))
 
-    def _relation_votes(self):
-        for (sid, *_), (ann, per_label_info) in self._relations.items():
+    def _relation_votes(self, only_valid=True):
+        for (
+            (sid, *_, flabel, tlabel),
+            (ann, votes_per_label),
+        ) in self._relations.items():
             try:
-                votes_per_label = per_label_info[
-                    ann.from_phrase.label, ann.to_phrase.label
-                ]
-                yield sid, ann, votes_per_label
-            except (AttributeError, KeyError):
+                if not only_valid or (
+                    ann.from_phrase.label == flabel and ann.to_phrase.label == tlabel
+                ):
+                    yield sid, ann, votes_per_label
+                else:
+                    raise AttributeError
+            except AttributeError:
                 yield sid, ann, {}
 
 
@@ -350,11 +355,15 @@ class BinaryEnsembledCollection(EnsembledCollection):
             assert label == ann.label
             yield sid, ann, {label: votes}
 
-    def _relation_votes(self):
+    def _relation_votes(self, only_valid=True):
         for (sid, *_, flabel, tlabel, label), (ann, votes) in self._relations.items():
             try:
-                if ann.from_phrase.label == flabel and ann.to_phrase.label == tlabel:
+                if not only_valid or (
+                    ann.from_phrase.label == flabel and ann.to_phrase.label == tlabel
+                ):
                     yield sid, ann, {label: votes}
+                else:
+                    raise AttributeError
             except AttributeError:
                 yield sid, ann, {}
 

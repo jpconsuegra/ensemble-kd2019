@@ -30,3 +30,17 @@ def keep_best_per_participant(choir: EnsembleChoir) -> EnsembleChoir:
         max(items, key=lambda x: choir.eval(x[1])) for items in group_by.values()
     )
     return EnsembleChoir(filtered, choir.gold)
+
+
+def keep_non_annotated_sentences(choir: EnsembleChoir) -> EnsembleChoir:
+    gold = choir.gold.clone()
+    submissions = {name: submit.clone() for name, submit in choir.submissions.items()}
+
+    for sid in range(len(choir.gold) - 1, -1, -1):
+        sentence = choir.gold.sentences[sid]
+        if sentence.annotated:
+            del gold.sentences[sid]
+            for submit in submissions.values():
+                del submit.sentences[sid]
+
+    return EnsembleChoir(submissions, gold)

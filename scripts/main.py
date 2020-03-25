@@ -232,29 +232,21 @@ def task_validate_submission(choir: EnsembleChoir, name: str, gold: Collection):
 
 
 if __name__ == "__main__":
+    path2submissions = Path("./data/ehealth2019/submissions/all")
+    path2ehealth19 = Path("./data/ehealth2019/testing")
+    path2scenario1 = path2ehealth19 / "scenario1-main"
+    path2scenario2 = path2ehealth19 / "scenario2-taskA"
+    path2scenario3 = path2ehealth19 / "scenario3-taskB"
+    path2ehealth20 = Path("./data/ehealth2020/gold")
 
-    path2subs = Path("./data/ehealth2019/submissions/all")
-    path2refs = Path("./data/ehealth2019/testing")
-    path2vals = Path("./data/ehealth2020/gold")
+    print(f"======== Loading ... (reference) ==============")
+    choir = EnsembleChoir().load(CollectionV1Handler, path2submissions, path2ehealth19)
+    print("======== Done! =================================")
 
-    print("======== Loading ... scenario1 ==============")
-    main_choir = EnsembleChoir().load(CollectionV1Handler, path2subs, path2refs)
-    print("======== Loading ... scenario2 ==============")
-    taskA_choir = EnsembleChoir().load(
-        CollectionV1Handler, path2subs, path2refs, scenario="2-taskA"
+    print(f"======== Loading ... (reference) ==============")
+    validation = CollectionV2Handler.load_dir(
+        Collection(), path2ehealth20, attributes=False
     )
-    print("======== Loading ... scenario3 ==============")
-    taskB_choir = EnsembleChoir().load(
-        CollectionV1Handler, path2subs, path2refs, scenario="3-taskB"
-    )
-    print("======== Done! ==============================")
-
-    choir = main_choir
-    # choir = EnsembleChoir.merge(main_choir, taskA_choir, taskB_choir)
-
-    print("======== Loading ... validation =============")
-    gold = CollectionV2Handler.load_dir(Collection(), path2vals, attributes=False)
-    print("======== Done! ==============================")
 
     # ensembler = get_majority_ensembler(choir, binary=True)
     # ensembler = get_f1_ensembler(choir, binary=True, best=True, top=None)
@@ -275,7 +267,7 @@ if __name__ == "__main__":
     #     choir, taskA_choir, taskB_choir, model_type=LogisticRegression, mode="each"
     # )  # 0.6611026808295397
 
-    # task_run(ensembler, main_choir.gold_annotated)
+    # task_run(ensembler, choir.gold_annotated)
     # task_run(ensembler, gold)
     # task_validate_submission(choir, 'talp', gold)
     # optimize_sampler_fn(choir, main_choir.gold_annotated, generations=500, pop_size=10)
@@ -287,5 +279,3 @@ if __name__ == "__main__":
     #     mode="category",
     #     limit=None,
     # )
-
-# TODO: hacer voting ensemble pero usando tambien informacion de los otros 2 scenarios (eso solo es importante para el F1)

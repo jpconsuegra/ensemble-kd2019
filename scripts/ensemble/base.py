@@ -54,9 +54,7 @@ class EnsembleChoir:
         self._load_submissions(handler, submits, scenario, best=best)
 
     def _load_gold(self, handler: CollectionHandler, gold: Path, scenario="1-main"):
-        number = scenario.split("-")[0]
-        gold_input = next(gold.glob(f"scenario{scenario}/*put_scenario{number}.txt"))
-        gold_collection = handler.load(Collection(), gold_input)
+        gold_collection = handler.load_dir(Collection(), gold / f"scenario{scenario}")
         self._update_gold(gold_collection)
 
     def _update_gold(self, gold: Collection):
@@ -95,13 +93,9 @@ class EnsembleChoir:
         *,
         best=False,
     ):
-        number = scenario.split("-")[0]
         submissions = {}
         for submit in userfolder.iterdir():
-            submit_input = next(
-                submit.glob(f"scenario{scenario}/*put_scenario{number}.txt")
-            )
-            collection = handler.load(Collection(), submit_input)
+            collection = handler.load_dir(Collection(), submit / f"scenario{scenario}")
             name = f"{userfolder.name}/{submit.name}"
             if self._is_invalid(collection, name):
                 continue

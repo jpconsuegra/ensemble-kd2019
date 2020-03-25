@@ -386,11 +386,7 @@ class Collection:
 class CollectionHandler:
     @classmethod
     def load_dir(cls, collection: Collection, finput: Path, **kargs) -> Collection:
-        for item in finput.iterdir():
-            if item.suffix == ".txt":
-                collection.load(item, **kargs)
-
-        return collection
+        pass
 
     @classmethod
     def load(cls, collection: Collection, finput: Path, **kargs) -> Collection:
@@ -402,6 +398,13 @@ class CollectionHandler:
 
 
 class CollectionV1Handler(CollectionHandler):
+    @classmethod
+    def load_dir(cls, collection: Collection, finput: Path) -> Collection:
+        for item in finput.iterdir():
+            if re.fullmatch(r".*put_scenario.*\.txt", item.name):
+                cls.load(collection, item)
+        return collection
+
     @classmethod
     def load(cls, collection: Collection, finput: Path) -> Collection:
         input_b_file = finput.parent / ("output_b_" + finput.name.split("_")[1])
@@ -526,6 +529,30 @@ class CollectionV1Handler(CollectionHandler):
 
 
 class CollectionV2Handler(CollectionHandler):
+    @classmethod
+    def load_dir(
+        cls,
+        collection: Collection,
+        finput: Path,
+        *,
+        legacy=True,
+        keyphrases=True,
+        relations=True,
+        attributes=True
+    ) -> Collection:
+        for item in finput.iterdir():
+            if item.suffix == ".txt":
+                cls.load(
+                    collection,
+                    item,
+                    legacy=legacy,
+                    keyphrases=keyphrases,
+                    relations=relations,
+                    attributes=attributes,
+                )
+
+        return collection
+
     @classmethod
     def load(
         cls,

@@ -1,6 +1,8 @@
 from collections import defaultdict
 from pathlib import Path
 
+from matplotlib import pyplot as plt
+
 from scripts.ensemble import EnsembleChoir, EnsembledCollection, EnsembleOrchestrator
 from scripts.ensemble.utils import keep_non_annotated_sentences
 
@@ -37,6 +39,14 @@ def normalize(sentences, choir):
     return [(sentence, score / len(choir.submissions)) for sentence, score in sentences]
 
 
+def plot(sentences, name, **kargs):
+    scores = [score for _, score in sentences]
+    plt.hist(scores, cumulative=True, **kargs)
+    plt.hist(scores, **kargs)
+    plt.savefig(f"{name}.pdf")
+    plt.close()
+
+
 if __name__ == "__main__":
     ps = Path("./data/submissions/all")
     pg = Path("./data/ehealth2019-testing")
@@ -50,6 +60,10 @@ if __name__ == "__main__":
     collection = orchestrator(choir)
 
     sentences = sort_sentences(collection)
-    sentences = normalize(sentences, choir)
-    for s, score in sentences:
+    normalized = normalize(sentences, choir)
+
+    for s, score in normalized:
         print(f"{s.text}\t{score}")
+
+    plot(sentences, "hist")
+    plot(normalized, "hist-norm")

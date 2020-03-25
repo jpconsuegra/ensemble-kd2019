@@ -17,5 +17,8 @@ RUN pip install sklearn
 
 RUN pip install -U tqdm
 
+RUN pip install -U matplotlib
+RUN pip install -U pandas
+
 COPY --from=autogoal /code/dist/autogoal-0.1.0.tar.gz /autogoal-0.1.0.tar.gz
 RUN pip install /autogoal-0.1.0.tar.gz

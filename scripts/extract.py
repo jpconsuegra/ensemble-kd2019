@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 
 from scripts.ensemble import EnsembleChoir, EnsembledCollection, EnsembleOrchestrator
 from scripts.ensemble.utils import keep_non_annotated_sentences
+from scripts.utils import Collection, CollectionV1Handler, CollectionV2Handler
 
 
 def sort_sentences(collection: EnsembledCollection):
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     ps = Path("./data/submissions/all")
     pg = Path("./data/ehealth2019-testing")
 
-    choir = EnsembleChoir().load(ps, pg, best=True)
+    choir = EnsembleChoir().load(CollectionV1Handler, ps, pg, best=True)
     choir = keep_non_annotated_sentences(choir)
 
     # should be equal with binary=False

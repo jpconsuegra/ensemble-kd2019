@@ -4,15 +4,22 @@ from pathlib import Path
 from typing import Optional
 
 from scripts.score import compute_metrics, subtaskA, subtaskB
-from scripts.utils import Collection, Keyphrase, Relation, Sentence
+from scripts.utils import Collection, CollectionHandler, Keyphrase, Relation, Sentence
 
 STOP = False
 
 
 class EnsembleChoir:
-    def __init__(self, submissions=None, gold: Collection = None):
+    def __init__(
+        self,
+        submissions=None,
+        gold: Collection = None,
+        *,
+        collection_handler=Collection,
+    ):
         self.submissions = submissions or {}
         self.gold: Collection = gold
+        self.Collection = collection_handler
 
     @property
     def sentences(self):
@@ -20,31 +27,54 @@ class EnsembleChoir:
 
     @property
     def gold_annotated(self):
-        return Collection([s for s in self.gold.sentences if s.annotated])
+        return self.Collection([s for s in self.gold.sentences if s.annotated])
 
-    def load(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
-        self._load_data(submits, gold, scenario=scenario, best=best)
+    def load(
+        self,
+        handler: CollectionHandler,
+        submits: Path,
+        gold: Path,
+        *,
+        scenario="1-main",
+        best=False,
+    ):
+        self._load_data(handler, submits, gold, scenario=scenario, best=best)
         return self
 
-    def _load_data(self, submits: Path, gold: Path, *, scenario="1-main", best=False):
-        self._load_gold(gold, scenario)
-        self._load_submissions(submits, scenario, best=best)
+    def _load_data(
+        self,
+        handler: CollectionHandler,
+        submits: Path,
+        gold: Path,
+        *,
+        scenario="1-main",
+        best=False,
+    ):
+        self._load_gold(handler, gold, scenario)
+        self._load_submissions(handler, submits, scenario, best=best)
 
-    def _load_gold(self, gold: Path, scenario="1-main"):
+    def _load_gold(self, handler: CollectionHandler, gold: Path, scenario="1-main"):
         number = scenario.split("-")[0]
         gold_input = next(gold.glob(f"scenario{scenario}/*put_scenario{number}.txt"))
-        gold_collection = Collection().load(gold_input)
+        gold_collection = handler.load(Collection(), gold_input)
         self._update_gold(gold_collection)
 
     def _update_gold(self, gold: Collection):
         self.gold = gold if self.gold is None else self.gold.merge(gold)
 
-    def _load_submissions(self, submits: Path, scenario="1-main", *, best=False):
+    def _load_submissions(
+        self,
+        handler: CollectionHandler,
+        submits: Path,
+        scenario="1-main",
+        *,
+        best=False,
+    ):
         if submits is None:
             print("No submission directory provided!")
             return
         for userfolder in submits.iterdir():
-            submit = self._load_user_submit(userfolder, scenario, best=best)
+            submit = self._load_user_submit(handler, userfolder, scenario, best=best)
             self._update_submissions(submit)
 
     def _update_submissions(self, submit, strict=False):
@@ -57,14 +87,21 @@ class EnsembleChoir:
                     continue
                 self.submissions[key] = value
 
-    def _load_user_submit(self, userfolder: Path, scenario="1-main", *, best=False):
+    def _load_user_submit(
+        self,
+        handler: CollectionHandler,
+        userfolder: Path,
+        scenario="1-main",
+        *,
+        best=False,
+    ):
         number = scenario.split("-")[0]
         submissions = {}
         for submit in userfolder.iterdir():
             submit_input = next(
                 submit.glob(f"scenario{scenario}/*put_scenario{number}.txt")
             )
-            collection = Collection().load(submit_input)
+            collection = handler.load(Collection(), submit_input)
             name = f"{userfolder.name}/{submit.name}"
             if self._is_invalid(collection, name):
                 continue

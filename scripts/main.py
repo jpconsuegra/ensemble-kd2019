@@ -38,8 +38,7 @@ from scripts.ensemble.learning import (
 )
 from scripts.ensemble.optimization import optimize_sampler_fn
 from scripts.ensemble.utils import keep_best_per_participant, keep_top_k_submissions
-from scripts.futils import Collection as FutureCollection
-from scripts.utils import Collection
+from scripts.utils import Collection, CollectionV1Handler, CollectionV2Handler
 
 
 def get_majority_ensembler(choir: EnsembleChoir, binary: bool):
@@ -222,7 +221,7 @@ def task_cross_validate(
     print("=================================")
 
 
-def task_validate_submission(choir: EnsembleChoir, name: str, gold: FutureCollection):
+def task_validate_submission(choir: EnsembleChoir, name: str, gold: Collection):
     choir = keep_best_per_participant(choir)
     submissions = [
         s for sname, s in choir.submissions.items() if sname.split("/")[0] == name
@@ -234,27 +233,31 @@ def task_validate_submission(choir: EnsembleChoir, name: str, gold: FutureCollec
 
 if __name__ == "__main__":
 
-    path2subs = Path("./data/submissions/all")
-    path2refs = Path("./data/ehealth2019-testing")
-    path2vals = Path("./data/ehealth2020-gold")
+    path2subs = Path("./data/ehealth2019/submissions/all")
+    path2refs = Path("./data/ehealth2019/testing")
+    path2vals = Path("./data/ehealth2020/gold")
 
     print("======== Loading ... scenario1 ==============")
-    main_choir = EnsembleChoir().load(path2subs, path2refs)
+    main_choir = EnsembleChoir().load(CollectionV1Handler, path2subs, path2refs)
     print("======== Loading ... scenario2 ==============")
-    taskA_choir = EnsembleChoir().load(path2subs, path2refs, scenario="2-taskA")
+    taskA_choir = EnsembleChoir().load(
+        CollectionV1Handler, path2subs, path2refs, scenario="2-taskA"
+    )
     print("======== Loading ... scenario3 ==============")
-    taskB_choir = EnsembleChoir().load(path2subs, path2refs, scenario="3-taskB")
+    taskB_choir = EnsembleChoir().load(
+        CollectionV1Handler, path2subs, path2refs, scenario="3-taskB"
+    )
     print("======== Done! ==============================")
 
     choir = main_choir
     # choir = EnsembleChoir.merge(main_choir, taskA_choir, taskB_choir)
 
     print("======== Loading ... validation =============")
-    gold = FutureCollection().load_dir(path2vals, attributes=False)
+    gold = CollectionV2Handler.load_dir(Collection(), path2vals, attributes=False)
     print("======== Done! ==============================")
 
     # ensembler = get_majority_ensembler(choir, binary=True)
-    # ensembler = get_f1_ensembler(choir, binary=True, best=True, top=6)
+    # ensembler = get_f1_ensembler(choir, binary=True, best=True, top=None)
     # ensembler = get_sklearn_ensembler(
     #     choir, model_type=RandomForestClassifier, mode="category"
     # )

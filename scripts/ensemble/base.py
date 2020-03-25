@@ -11,15 +11,10 @@ STOP = False
 
 class EnsembleChoir:
     def __init__(
-        self,
-        submissions=None,
-        gold: Collection = None,
-        *,
-        collection_handler=Collection,
+        self, submissions=None, gold: Collection = None,
     ):
         self.submissions = submissions or {}
         self.gold: Collection = gold
-        self.Collection = collection_handler
 
     @property
     def sentences(self):
@@ -27,7 +22,7 @@ class EnsembleChoir:
 
     @property
     def gold_annotated(self):
-        return self.Collection([s for s in self.gold.sentences if s.annotated])
+        return Collection([s for s in self.gold.sentences if s.annotated])
 
     def load(
         self,

@@ -37,8 +37,17 @@ from scripts.ensemble.learning import (
     TrainedPredictor,
 )
 from scripts.ensemble.optimization import optimize_sampler_fn
-from scripts.ensemble.utils import keep_best_per_participant, keep_top_k_submissions
-from scripts.utils import Collection, CollectionV1Handler, CollectionV2Handler
+from scripts.ensemble.utils import (
+    extract_submissions,
+    keep_best_per_participant,
+    keep_top_k_submissions,
+)
+from scripts.utils import (
+    Collection,
+    CollectionHandler,
+    CollectionV1Handler,
+    CollectionV2Handler,
+)
 
 
 def get_majority_ensembler(choir: EnsembleChoir, binary: bool):
@@ -231,25 +240,72 @@ def task_validate_submission(choir: EnsembleChoir, name: str, gold: Collection):
     print("==== SCORE ====\n", EnsembleChoir.evaluate(submit, gold, clamp=True))
 
 
-if __name__ == "__main__":
-    path2submissions = Path("./data/ehealth2019/submissions/all")
-    path2ehealth19 = Path("./data/ehealth2019/testing")
-    path2scenario1 = path2ehealth19 / "scenario1-main"
-    path2scenario2 = path2ehealth19 / "scenario2-taskA"
-    path2scenario3 = path2ehealth19 / "scenario3-taskB"
-    path2ehealth20 = Path("./data/ehealth2020/gold")
-
-    print(f"======== Loading ... (reference) ==============")
-    choir = EnsembleChoir().load(CollectionV1Handler, path2submissions, path2ehealth19)
-    print("======== Done! =================================")
-
-    print(f"======== Loading ... (reference) ==============")
-    validation = CollectionV2Handler.load_dir(
-        Collection(), path2ehealth20, attributes=False
+def task_extract(
+    outputdir: Path,
+    path2ehealth19_submissions: Path,
+    path2ehealth19_gold: Path,
+    path2ehealth20_ann: Path,
+):
+    collection = CollectionV2Handler.load_dir(
+        Collection(), path2ehealth20_ann, attributes=False
+    )
+    choir = EnsembleChoir().load(
+        CollectionV1Handler,
+        path2ehealth19_submissions,
+        path2ehealth19_gold,
+        scenario="1-main",
+        best=False,
     )
 
+    selection = extract_submissions(collection, choir)
+
+    output: Path = outputdir / "testing" / "scenario1-main"
+    output.mkdir(parents=True)
+    CollectionV1Handler.dump(selection.gold, output / "input_scenario1.txt")
+
+    for name, submit in selection.submissions.items():
+        output: Path = outputdir / "submissions" / name / "scenario1-main"
+        output.mkdir(parents=True)
+        CollectionV1Handler.dump(submit, output / "output_scenario1.txt")
+
+
+if __name__ == "__main__":
+    path2ehealth19_submissions = Path("./data/ehealth2019/submissions/all")
+    path2ehealth19_gold = Path("./data/ehealth2019/testing")
+    path2scenario1 = path2ehealth19_gold / "scenario1-main"
+    path2scenario2 = path2ehealth19_gold / "scenario2-taskA"
+    path2scenario3 = path2ehealth19_gold / "scenario3-taskB"
+    path2ehealth20_submissions = Path("./data/ehealth2020/submissions")
+    path2ehealth20_gold = Path("./data/ehealth2020/testing")
+    path2ehealth20_ann = Path("./data/ehealth2020/ann")
+
+    # task_extract(
+    #     Path("./data/ehealth2020"),
+    #     path2ehealth19_submissions,
+    #     path2ehealth19_gold,
+    #     path2ehealth20_ann,
+    # )
+
+    submissions = path2ehealth19_submissions
+    reference = path2ehealth19_gold
+    validation = path2ehealth20_ann
+    # validation = path2ehealth20_gold
+
+    print(f"======== Loading ... (reference) ==============")
+    choir = EnsembleChoir().load(CollectionV1Handler, submissions, reference)
+    print("======== Done! =================================")
+
+    print(f"======== Loading ... (validation) ==============")
+    validation = CollectionV2Handler.load_dir(
+        Collection(), validation, attributes=False
+    )
+    # validation = CollectionV1Handler.load_dir(
+    #     Collection(), validation
+    # )
+    print("======== Done! =================================")
+
     # ensembler = get_majority_ensembler(choir, binary=True)
-    # ensembler = get_f1_ensembler(choir, binary=True, best=True, top=None)
+    ensembler = get_f1_ensembler(choir, binary=True, best=True, top=None)
     # ensembler = get_sklearn_ensembler(
     #     choir, model_type=RandomForestClassifier, mode="category"
     # )
@@ -268,8 +324,8 @@ if __name__ == "__main__":
     # )  # 0.6611026808295397
 
     # task_run(ensembler, choir.gold_annotated)
-    # task_run(ensembler, gold)
-    # task_validate_submission(choir, 'talp', gold)
+    # task_run(ensembler, validation)
+    # task_validate_submission(choir, 'talp', validation)
     # optimize_sampler_fn(choir, main_choir.gold_annotated, generations=500, pop_size=10)
     # task_cross_validate(
     #     choir,

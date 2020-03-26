@@ -376,6 +376,13 @@ class Collection:
     def filter_relation(self, labels) -> "Collection":
         return self.filter(relation=lambda r: r.label in labels)
 
+    def find_first_match(self, text) -> Sentence:
+        matches = self.find_matches(text)
+        return None if not matches else matches[0]
+
+    def find_matches(self, text) -> List[Sentence]:
+        return [s for s in self.sentences if s.text == text]
+
     def load(self, finput: Path) -> "Collection":
         return CollectionV1Handler.load(self, finput)
 

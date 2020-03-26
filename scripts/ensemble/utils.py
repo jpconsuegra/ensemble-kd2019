@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 from scripts.ensemble import EnsembleChoir
+from scripts.utils import Collection
 
 
 def keep_top_k_submissions(choir: EnsembleChoir, k) -> EnsembleChoir:
@@ -43,4 +44,25 @@ def keep_non_annotated_sentences(choir: EnsembleChoir) -> EnsembleChoir:
             for submit in submissions.values():
                 del submit.sentences[sid]
 
+    return EnsembleChoir(submissions, gold)
+
+
+def extract_submissions(collection: Collection, choir: EnsembleChoir) -> EnsembleChoir:
+    gold = collection.clone()
+    submissions = {}
+    not_found = set()
+    for name, submit in choir.submissions.items():
+        sentences = []
+        for sid, s in enumerate(collection.sentences):
+            match = submit.find_first_match(s.text)
+            try:
+                sentences.append(match.clone())
+            except AttributeError:
+                sentences.append(None)
+                not_found.add(sid)
+        submissions[name] = Collection(sentences)
+    for sid in sorted(not_found, reverse=True):
+        del gold.sentences[sid]
+        for submit in submissions.values():
+            del submit.sentences[sid]
     return EnsembleChoir(submissions, gold)

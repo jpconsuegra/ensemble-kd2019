@@ -102,7 +102,7 @@ class EnsembleChoir:
     def _is_invalid(self, submit: Collection, name: str):
         error = []
         if (len(submit) + self._current_count(name)) != len(self.gold):
-            error.append("ERROR! Wrong number of sentences")
+            error.append(f"ERROR! Wrong number of sentences at {name}")
         for s, g in zip(submit.sentences, self.gold.sentences[-len(submit) :]):
             if s.text != g.text:
                 error.append("ERROR! {0}\nvs\n{1}".format(s, g))

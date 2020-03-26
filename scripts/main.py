@@ -261,12 +261,16 @@ def task_extract(
 
     output: Path = outputdir / "testing" / "scenario1-main"
     output.mkdir(parents=True)
-    CollectionV1Handler.dump(selection.gold, output / "input_scenario1.txt")
+    CollectionV1Handler.dump(
+        selection.gold, output / "input_scenario1.txt", skip_empty_sentences=False
+    )
 
     for name, submit in selection.submissions.items():
         output: Path = outputdir / "submissions" / name / "scenario1-main"
         output.mkdir(parents=True)
-        CollectionV1Handler.dump(submit, output / "output_scenario1.txt")
+        CollectionV1Handler.dump(
+            submit, output / "output_scenario1.txt", skip_empty_sentences=False
+        )
 
 
 if __name__ == "__main__":

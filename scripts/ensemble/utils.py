@@ -65,4 +65,6 @@ def extract_submissions(collection: Collection, choir: EnsembleChoir) -> Ensembl
         del gold.sentences[sid]
         for submit in submissions.values():
             del submit.sentences[sid]
+    for submit in submissions.values():
+        assert len(submit) == len(gold)
     return EnsembleChoir(submissions, gold)

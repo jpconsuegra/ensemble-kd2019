@@ -239,6 +239,24 @@ class GoldOracleScorer(Scorer):
         return gold_annotation is not None
 
 
+class FocusedScorer(Scorer):
+    def __init__(self, name: str, discrete: bool):
+        self._name = name
+        self._discrete = discrete
+
+    def __call__(self, weights: Dict[str, float], annotation, sid, label):
+        try:
+            weight = weights[self._name]
+            return 1.0 if self._discrete else weight
+        except KeyError:
+            return 0.0
+
+
+class YesToAllScorer(Scorer):
+    def __call__(self, weights: Dict[str, float], annotation, sid, label):
+        return 1.0
+
+
 # =======================================================================
 # - Validator -----------------------------------------------------------
 # =======================================================================
@@ -271,4 +289,3 @@ class ConstantThresholdValidator(ThresholdValidator):
 class MajorityValidator(ConstantThresholdValidator):
     def __init__(self, n_submits):
         super().__init__(threshold=n_submits // 2)
-

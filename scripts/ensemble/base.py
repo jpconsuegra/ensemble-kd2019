@@ -411,8 +411,8 @@ class Ensembler:
     def choir(self):
         return self._choir
 
-    def __call__(self) -> Collection:
-        choir = self._choir
+    def __call__(self, choir: EnsembleChoir = None) -> Collection:
+        choir = choir if choir is not None else self._choir
         to_ensemble = self._orchestrator(choir)
         return self._ensemble(to_ensemble)
 

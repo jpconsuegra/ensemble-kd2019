@@ -20,6 +20,7 @@ from scripts.ensemble.ensemblers import (
     ConstantThresholdValidator,
     ExpertScorer,
     F1Weighter,
+    FocusedScorer,
     GoldOracleScorer,
     MajorityValidator,
     ManualVotingEnsembler,
@@ -28,6 +29,7 @@ from scripts.ensemble.ensemblers import (
     SumScorer,
     ThresholdValidator,
     UniformWeighter,
+    YesToAllScorer,
 )
 from scripts.ensemble.features import model_handler_assistant
 from scripts.ensemble.learning import (
@@ -77,10 +79,7 @@ def get_ensembler_with_top(choir: EnsembleChoir, k: int, binary: bool):
     return get_ensembler(choir, binary=binary)
 
 
-def get_f1_ensembler(choir: EnsembleChoir, binary: bool, best: bool, top=None):
-    choir = keep_best_per_participant(choir) if best else choir
-    choir = keep_top_k_submissions(choir, top) if top is not None else choir
-
+def get_f1_ensembler(choir: EnsembleChoir, binary: bool):
     orchestrator = EnsembleOrchestrator(binary=binary)
 
     weighter = F1Weighter.build(choir)
@@ -96,6 +95,28 @@ def get_gold_ensembler(choir: EnsembleChoir, binary: bool):
 
     weighter = UniformWeighter.build()  # F1Weighter.build(choir)
     scorer = GoldOracleScorer(choir)
+    validator = NonZeroValidator()
+
+    ensembler = ManualVotingEnsembler(choir, orchestrator, weighter, scorer, validator)
+    return ensembler
+
+
+def get_participant_ensembler(choir: EnsembleChoir, binary: bool, name: str):
+    orchestrator = EnsembleOrchestrator(binary=binary)
+
+    weighter = UniformWeighter.build()
+    scorer = FocusedScorer(name, discrete=True)
+    validator = NonZeroValidator()
+
+    ensembler = ManualVotingEnsembler(choir, orchestrator, weighter, scorer, validator)
+    return ensembler
+
+
+def get_union_ensembler(choir: EnsembleChoir, binary: bool):
+    orchestrator = EnsembleOrchestrator(binary=binary)
+
+    weighter = UniformWeighter.build()
+    scorer = YesToAllScorer()
     validator = NonZeroValidator()
 
     ensembler = ManualVotingEnsembler(choir, orchestrator, weighter, scorer, validator)
@@ -168,10 +189,11 @@ def get_multisource_ensembler(
     return get_isolated_ensembler(choir, taskA_choir, taskB_choir, model_type, mode)
 
 
-def task_run(ensembler: Ensembler, gold=None):
-    gold = gold or ensembler.choir.gold
-    ensembled = ensembler()
-    print("==== SCORE ====\n", EnsembleChoir.evaluate(ensembled, gold, clamp=True))
+def task_run(ensembler: Ensembler, target: EnsembleChoir):
+    ensembled = ensembler(target)
+    print(
+        "==== SCORE ====\n", EnsembleChoir.evaluate(ensembled, target.gold, clamp=True)
+    )
 
 
 def validate_model(
@@ -233,10 +255,13 @@ def task_cross_validate(
 def task_validate_submission(choir: EnsembleChoir, name: str, gold: Collection):
     choir = keep_best_per_participant(choir)
     submissions = [
-        s for sname, s in choir.submissions.items() if sname.split("/")[0] == name
+        (sname, s)
+        for sname, s in choir.submissions.items()
+        if sname.split("/")[0] == name
     ]
     assert len(submissions) == 1
-    submit = submissions[0]
+    selected_name, submit = submissions[0]
+    print(selected_name)
     print("==== SCORE ====\n", EnsembleChoir.evaluate(submit, gold, clamp=True))
 
 
@@ -281,6 +306,7 @@ if __name__ == "__main__":
     path2scenario3 = path2ehealth19_gold / "scenario3-taskB"
     path2ehealth20_submissions = Path("./data/ehealth2020/submissions")
     path2ehealth20_gold = Path("./data/ehealth2020/testing")
+    path2scenario4 = path2ehealth20_gold / "scenario1-main"
     path2ehealth20_ann = Path("./data/ehealth2020/ann")
 
     # task_extract(
@@ -290,29 +316,37 @@ if __name__ == "__main__":
     #     path2ehealth20_ann,
     # )
 
-    submissions = path2ehealth19_submissions
-    reference = path2ehealth19_gold
-    validation = path2ehealth20_ann
-    # validation = path2ehealth20_gold
+    ref_submissions = path2ehealth20_submissions
+    ref_test = path2ehealth20_gold
+    val_submissions = path2ehealth19_submissions
+    val_test = path2ehealth19_gold
+
+    # ref_submissions = path2ehealth19_submissions
+    # ref_test = path2ehealth19_gold
+    # val_submissions = path2ehealth20_submissions
+    # val_test = path2ehealth20_gold
 
     print(f"======== Loading ... (reference) ==============")
-    choir = EnsembleChoir().load(CollectionV1Handler, submissions, reference)
+    choir = EnsembleChoir().load(CollectionV1Handler, ref_submissions, ref_test)
     print("======== Done! =================================")
 
     print(f"======== Loading ... (validation) ==============")
-    validation = CollectionV2Handler.load_dir(
-        Collection(), validation, attributes=False
-    )
-    # validation = CollectionV1Handler.load_dir(
-    #     Collection(), validation
-    # )
+    validation = EnsembleChoir().load(CollectionV1Handler, val_submissions, val_test)
     print("======== Done! =================================")
 
+    # # BEST
+    # choir = keep_best_per_participant(choir)
+    # validation = keep_best_per_participant(validation)
+
+    # # TOP
+    # choir = keep_top_k_submissions(choir, None)
+    # validation = keep_top_k_submissions(validation, None)
+
     # ensembler = get_majority_ensembler(choir, binary=True)
-    ensembler = get_f1_ensembler(choir, binary=True, best=True, top=None)
-    # ensembler = get_sklearn_ensembler(
-    #     choir, model_type=RandomForestClassifier, mode="category"
-    # )
+    # ensembler = get_f1_ensembler(choir, binary=True)
+    # ensembler = get_participant_ensembler(choir, binary=True, name="talp/576640")
+    # ensembler = get_union_ensembler(choir, binary=False)
+    # ensembler = get_sklearn_ensembler(choir, model_type=SVC, mode="all")
     # ensembler = get_isolated_ensembler(
     #     choir,
     #     taskA_choir,
@@ -327,10 +361,10 @@ if __name__ == "__main__":
     #     choir, taskA_choir, taskB_choir, model_type=LogisticRegression, mode="each"
     # )  # 0.6611026808295397
 
-    # task_run(ensembler, choir.gold_annotated)
+    # task_run(ensembler, choir)
     # task_run(ensembler, validation)
-    # task_validate_submission(choir, 'talp', validation)
-    # optimize_sampler_fn(choir, main_choir.gold_annotated, generations=500, pop_size=10)
+    # task_validate_submission(validation, "talp", validation.gold)
+    # optimize_sampler_fn(choir, choir.gold_annotated, generations=500, pop_size=10)
     # task_cross_validate(
     #     choir,
     #     taskA_choir,

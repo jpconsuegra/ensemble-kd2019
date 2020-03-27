@@ -199,6 +199,10 @@ def map_keyphrase(keyphrase, data):
         return data[CORRECT_A][keyphrase]
     except KeyError:
         pass
+    # try:
+    #     return data[INCORRECT_A][keyphrase]
+    # except KeyError:
+    #     pass
     try:
         return data[PARTIAL_A][keyphrase]
     except KeyError:

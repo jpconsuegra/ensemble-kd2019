@@ -47,6 +47,15 @@ def keep_non_annotated_sentences(choir: EnsembleChoir) -> EnsembleChoir:
     return EnsembleChoir(submissions, gold)
 
 
+def keep_annotated_sentences(choir: EnsembleChoir) -> EnsembleChoir:
+    gold_annotated_sids = choir.gold_annotated_sid()
+    submissions = {
+        name: Collection([submit.sentences[sid] for sid in gold_annotated_sids])
+        for name, submit in choir.submissions.items()
+    }
+    return EnsembleChoir(submissions, choir.gold_annotated)
+
+
 def extract_submissions(collection: Collection, choir: EnsembleChoir) -> EnsembleChoir:
     gold = collection.clone()
     submissions = {}

@@ -41,9 +41,11 @@ from scripts.ensemble.learning import (
 from scripts.ensemble.optimization import optimize_sampler_fn
 from scripts.ensemble.utils import (
     extract_submissions,
+    keep_annotated_sentences,
     keep_best_per_participant,
     keep_top_k_submissions,
 )
+from scripts.extract import performance_per_agreement
 from scripts.utils import (
     Collection,
     CollectionHandler,
@@ -298,6 +300,13 @@ def task_extract(
         )
 
 
+def task_performance_per_agreement(ensembler: Ensembler, target: EnsembleChoir):
+    target = keep_annotated_sentences(target)
+    ensembled = ensembler(target, collection_only=False)
+    for item in performance_per_agreement(ensembled, normalized=True):
+        print(item)
+
+
 if __name__ == "__main__":
     path2ehealth19_submissions = Path("./data/ehealth2019/submissions/all")
     path2ehealth19_gold = Path("./data/ehealth2019/testing")
@@ -326,7 +335,7 @@ if __name__ == "__main__":
     # val_submissions = path2ehealth20_submissions
     # val_test = path2ehealth20_gold
 
-    print(f"======== Loading ... (reference) ==============")
+    print(f"======== Loading ... (reference) ===============")
     choir = EnsembleChoir().load(CollectionV1Handler, ref_submissions, ref_test)
     print("======== Done! =================================")
 
@@ -364,6 +373,8 @@ if __name__ == "__main__":
     # task_run(ensembler, choir)
     # task_run(ensembler, validation)
     # task_validate_submission(validation, "talp", validation.gold)
+    # task_performance_per_agreement(ensembler, choir)
+    # task_performance_per_agreement(ensembler, validation)
     # optimize_sampler_fn(choir, choir.gold_annotated, generations=500, pop_size=10)
     # task_cross_validate(
     #     choir,

@@ -379,7 +379,7 @@ class BinaryEnsembledCollection(EnsembledCollection):
 
     def _keyphrase_votes(self):
         for (sid, *_, label), (ann, votes) in self._keyphrases.items():
-            assert label == ann.label
+            # assert label == ann.label # true first but false after ensembling
             yield sid, ann, {label: votes}
 
     def _relation_votes(self, only_valid=True):
@@ -412,10 +412,11 @@ class Ensembler:
     def choir(self):
         return self._choir
 
-    def __call__(self, choir: EnsembleChoir = None) -> Collection:
+    def __call__(self, choir: EnsembleChoir = None, collection_only=True) -> Collection:
         choir = choir if choir is not None else self._choir
         to_ensemble = self._orchestrator(choir)
-        return self._ensemble(to_ensemble)
+        ensembled = self._ensemble(to_ensemble)
+        return ensembled if collection_only else to_ensemble
 
     def _ensemble(self, to_ensemble: EnsembledCollection) -> Collection:
         self._do_ensemble(to_ensemble)

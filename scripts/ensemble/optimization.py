@@ -35,7 +35,6 @@ from scripts.ensemble.ensemblers import (
 from scripts.ensemble.learning import (
     ModelTrainer,
     PredictiveEnsembler,
-    TrainedPredictor,
     get_trained_predictor,
 )
 from scripts.ensemble.utils import (
@@ -164,18 +163,24 @@ def build_generator_and_fn(
         if sampler.boolean("load-best"):
             train_choir = cached_best_choir
 
-        if sampler.boolean("top-best"):
-            n_submits = sampler.discrete(1, len(train_choir.submissions), "top-submits")
-            train_choir = keep_top_k_submissions(train_choir, n_submits)
-        else:
-            n_submits = sampler.discrete(1, len(train_choir.submissions), "n-submits")
-            submissions = sampler.multichoice(
-                train_choir.submissions.keys(), n_submits, "submissions"
-            )
-            submissions = sorted(submissions)  # avoid duplicated models
-            train_choir = keep_named_submissions(train_choir, submissions)
-
         if manual_voting and (not learning or not sampler.boolean("learning")):
+
+            # ---- TRAINING CHOIR -------------------------------------------
+            if sampler.boolean("top-best"):
+                n_submits = sampler.discrete(
+                    1, len(train_choir.submissions), "top-submits"
+                )
+                train_choir = keep_top_k_submissions(train_choir, n_submits)
+            else:
+                n_submits = sampler.discrete(
+                    1, len(train_choir.submissions), "n-submits"
+                )
+                submissions = sampler.multichoice(
+                    train_choir.submissions.keys(), n_submits, "submissions"
+                )
+                submissions = sorted(submissions)  # avoid duplicated models
+                train_choir = keep_named_submissions(train_choir, submissions)
+
             # ---- ORCHESTRATOR ---------------------------------------------
             binary = sampler.boolean("binary")
             orchestrator = EnsembleOrchestrator(binary=binary)
@@ -279,7 +284,11 @@ def build_generator_and_fn(
             )
 
             predictor = get_trained_predictor(
-                reference, model_type, mode=mode, weighting_table=weighting_table
+                reference,
+                model_type,
+                mode=mode,
+                weighting_table=weighting_table,
+                lazy=True,
             )
 
             # ==== ENSEMBLER ================================================

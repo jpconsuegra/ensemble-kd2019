@@ -66,14 +66,22 @@ class TrainedPredictor(Predictor):
         *,
         trainer: ModelTrainer,
         ignore=(),
+        lazy=False,
     ):
         self._threshold = threshold
-        self.model: ModelHandler = trainer(
+        self._training_func = lambda: trainer(
             reference_collection.choir,
             reference_collection.keyphrase_votes()
             + reference_collection.relation_votes(False),
             ignore=ignore,
         )
+        self._model: ModelHandler = None if lazy else self.model
+
+    @property
+    def model(self) -> ModelHandler:
+        if self._model is None:
+            self._model = self._training_func()
+        return self._model
 
     def __call__(self, annotation_votes, tasks):
         for _, (model, _, anns, labels, features) in self.model(
@@ -125,6 +133,7 @@ def get_trained_predictor(
     mode: Literal["category", "all", "each"],
     ignore=(),
     weighting_table=None,
+    lazy=False,
     **kargs,
 ):
     handler = model_handler_assistant(
@@ -135,5 +144,5 @@ def get_trained_predictor(
     )
 
     return TrainedPredictor(
-        reference, 0.5, trainer=ModelTrainer(handler), ignore=ignore
+        reference, 0.5, trainer=ModelTrainer(handler), ignore=ignore, lazy=lazy
     )

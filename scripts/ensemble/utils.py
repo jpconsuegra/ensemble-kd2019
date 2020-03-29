@@ -56,6 +56,22 @@ def keep_annotated_sentences(choir: EnsembleChoir) -> EnsembleChoir:
     return EnsembleChoir(submissions, choir.gold_annotated)
 
 
+def exclude_from(choir: EnsembleChoir, ignore: Collection):
+    selected = [
+        sid
+        for sid, sentence in enumerate(choir.sentences)
+        if not ignore.find_matches(sentence.text)
+    ]
+
+    gold = Collection([choir.gold.sentences[sid] for sid in selected])
+    submissions = {
+        name: Collection([submit.sentences[sid] for sid in selected])
+        for name, submit in choir.submissions.items()
+    }
+
+    return EnsembleChoir(submissions, gold)
+
+
 def extract_submissions(collection: Collection, choir: EnsembleChoir) -> EnsembleChoir:
     gold = collection.clone()
     submissions = {}

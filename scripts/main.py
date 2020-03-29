@@ -43,12 +43,19 @@ from scripts.ensemble.optimization import (
     optimize_sampler_fn,
 )
 from scripts.ensemble.utils import (
+    exclude_from,
     extract_submissions,
     keep_annotated_sentences,
     keep_best_per_participant,
+    keep_non_annotated_sentences,
     keep_top_k_submissions,
 )
-from scripts.extract import performance_per_agreement, plot_performance
+from scripts.extract import (
+    normalize_scores,
+    performance_per_agreement,
+    plot_performance,
+    sort_sentences,
+)
 from scripts.utils import (
     Collection,
     CollectionHandler,
@@ -320,6 +327,24 @@ def task_performance_per_agreement(ensembler: Ensembler, target: EnsembleChoir):
     # plot_performance(sequence, order=["top", "score", "f1"])
 
 
+def task_do_ensemble(ensembler: Ensembler, target: EnsembleChoir):
+    ensembled = ensembler(target, collection_only=False)
+    sentences = []
+    scores = []
+    for sid, _, score in normalize_scores(
+        sort_sentences(ensembled, reverse=True), target
+    ):
+        sentence = ensembled.collection.sentences[sid]
+        if sentence.annotated:
+            sentences.append(sentence)
+            scores.append(score)
+    output_collection = Collection(sentences)
+
+    opath = "./data/ensemble/ensemble.{}"
+    CollectionV2Handler.dump(output_collection, Path(opath.format("txt")))
+    Path(opath.format("order")).write_text("\n".join(str(s) for s in scores))
+
+
 if __name__ == "__main__":
     path2ehealth19_submissions = Path("./data/ehealth2019/submissions/all")
     path2ehealth19_gold = Path("./data/ehealth2019/testing")
@@ -393,13 +418,13 @@ if __name__ == "__main__":
     #     choir.gold_annotated,
     #     {
     #         "load-best": True,
-    #         "top-best": False,
-    #         "n-submits": 2,
-    #         "submissions": ["uhmajakd/576721", "vsp/576661"],
     #         "learning": True,
     #         "model-type": "randf",
     #         "training-mode": "category",
+    #         "weight-learning-votes": True,
     #     },
+    #     manual_voting=True,
+    #     learning=True,
     # )
 
     # task_run(ensembler, choir)
@@ -407,7 +432,14 @@ if __name__ == "__main__":
     # task_validate_submission(validation, "talp", validation.gold)
     # task_performance_per_agreement(ensembler, choir)
     # task_performance_per_agreement(ensembler, validation)
-    # optimize_sampler_fn(choir, choir.gold_annotated, generations=500, pop_size=10)
+    # optimize_sampler_fn(
+    #     choir,
+    #     choir.gold_annotated,
+    #     generations=500,
+    #     pop_size=10,
+    #     manual_voting=True,
+    #     learning=True,
+    # )
     # task_cross_validate(
     #     choir,
     #     taskA_choir,
@@ -416,3 +448,12 @@ if __name__ == "__main__":
     #     mode="category",
     #     limit=None,
     # )
+
+    # print(len(validation.gold), len(validation.gold_annotated))
+    # output = keep_non_annotated_sentences(validation)
+    # print(len(output.gold))
+    # print(len(choir.gold), len(choir.gold_annotated))
+    # output = exclude_from(output, choir.gold_annotated)
+    # print(len(output.gold))
+    # task_do_ensemble(ensembler, output)
+    # # Hay oraciones que estan tanto en el test viejo como en el nuevo!!!

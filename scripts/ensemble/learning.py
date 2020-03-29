@@ -1,4 +1,4 @@
-from typing import Generator, Optional, Tuple, Union
+from typing import Generator, Literal, Optional, Tuple, Union
 
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
@@ -6,7 +6,10 @@ from sklearn.svm import SVC
 from tqdm import tqdm
 
 from scripts.ensemble import EnsembleChoir, EnsembledCollection, Ensembler
-from scripts.ensemble.features import AllInOneModel, ModelHandler, PerLabelModel
+from scripts.ensemble.features import (
+    ModelHandler,
+    model_handler_assistant,
+)
 from scripts.utils import ENTITIES, RELATIONS, Keyphrase, Relation
 
 
@@ -113,3 +116,24 @@ class IsolatedPredictor(Predictor):
             yield from self._taskB_predictor(annotation_votes, task)
         else:
             raise ValueError("Unknown task!")
+
+
+def get_trained_predictor(
+    reference: EnsembledCollection,
+    model_type,
+    *,
+    mode: Literal["category", "all", "each"],
+    ignore=(),
+    weighting_table=None,
+    **kargs,
+):
+    handler = model_handler_assistant(
+        voters=reference.choir.submissions.keys(),
+        model_init=lambda: model_type(random_state=0, **kargs),
+        mode=mode,
+        weighting_table=weighting_table,
+    )
+
+    return TrainedPredictor(
+        reference, 0.5, trainer=ModelTrainer(handler), ignore=ignore
+    )

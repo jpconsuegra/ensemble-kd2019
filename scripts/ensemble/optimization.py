@@ -1,12 +1,21 @@
 from functools import total_ordering
+from typing import Literal
 
 from autogoal import optimize
 from autogoal.grammar import Boolean, Categorical, Continuous, Discrete
 from autogoal.sampling import Sampler
 from autogoal.search import ConsoleLogger, Logger, PESearch, ProgressLogger
 from autogoal.utils import nice_repr
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
 
-from scripts.ensemble import EnsembleChoir, EnsembleOrchestrator, Ensembler
+from scripts.ensemble import (
+    EnsembleChoir,
+    EnsembledCollection,
+    EnsembleOrchestrator,
+    Ensembler,
+)
 from scripts.ensemble.ensemblers import (
     AggregateTopScorer,
     AverageScorer,
@@ -22,6 +31,12 @@ from scripts.ensemble.ensemblers import (
     SumScorer,
     ThresholdValidator,
     UniformWeighter,
+)
+from scripts.ensemble.learning import (
+    ModelTrainer,
+    PredictiveEnsembler,
+    TrainedPredictor,
+    get_trained_predictor,
 )
 from scripts.ensemble.utils import (
     keep_best_per_participant,
@@ -97,11 +112,24 @@ class LogSampler:
         return iter(self._log)
 
     def __str__(self):
-        items = ",\n    ".join(f"{k}: {v}" for k, v in self)
+        items = ",\n    ".join(f"{repr(k)}: {repr(v)}" for k, v in self)
         return "{\n    " + items + "\n}"
 
     def __repr__(self):
         return str(self)
+
+
+class LockedSampler:
+    def __init__(self, configuration: dict, **kargs):
+        self.lock = list(configuration.values()) + list(kargs.values())
+        self.pointer = -1
+
+    def _next(self):
+        self.pointer += 1
+        return self.lock[self.pointer]
+
+    def __getattr__(self, name):
+        return lambda *args, **kargs: self._next()
 
 
 class SampleModel:
@@ -116,23 +144,21 @@ class SampleModel:
         return repr(self.sampler)
 
 
-def build_generator_and_fn(choir: EnsembleChoir, gold: Collection = None):
+def build_generator_and_fn(
+    choir: EnsembleChoir, gold: Collection = None, manual_voting=True, learning=True
+):
     if gold is None:
         gold = choir.gold
 
-    print("======== Caching ... F1Weighter =============")
+    print("======== Caching ... F1Weighter ================")
     cached_f1_weighter = F1Weighter.build(choir)
-    print("======== Caching ... Best choir =============")
+    print("======== Caching ... Best choir ================")
     cached_best_choir = keep_best_per_participant(choir)
 
-    def generator(sampler: Sampler):
+    def generator(sampler: Sampler, log=True):
 
-        sampler = LogSampler(sampler)
+        sampler = LogSampler(sampler) if log else sampler
         train_choir = choir
-
-        # ---- ORCHESTRATOR ---------------------------------------------
-        binary = sampler.boolean("binary")
-        orchestrator = EnsembleOrchestrator(binary=binary)
 
         # ---- TRAINING CHOIR -------------------------------------------
         if sampler.boolean("load-best"):
@@ -149,78 +175,116 @@ def build_generator_and_fn(choir: EnsembleChoir, gold: Collection = None):
             submissions = sorted(submissions)  # avoid duplicated models
             train_choir = keep_named_submissions(train_choir, submissions)
 
-        # ---- WEIGHTER -------------------------------------------------
-        _weighter = sampler.categorical(["uniform", "f1"], "weighter")
-        if _weighter == "uniform":
-            weighter = UniformWeighter.build()
-        elif _weighter == "f1":
-            weighter = cached_f1_weighter  # F1Weighter.build(choir)
-        else:
-            raise Exception()
+        if manual_voting and (not learning or not sampler.boolean("learning")):
+            # ---- ORCHESTRATOR ---------------------------------------------
+            binary = sampler.boolean("binary")
+            orchestrator = EnsembleOrchestrator(binary=binary)
 
-        # ---- SCORER ---------------------------------------------------
-        _scorer = sampler.categorical(
-            ["avg", "sum", "expert", "max", "avg-top", "sum-top"], "scorer"
-        )
-        if _scorer == "avg":
-            scorer = AverageScorer()
-        elif _scorer == "sum":
-            scorer = SumScorer()
-        elif _scorer == "expert":
-            discrete = sampler.boolean("discrete-expert")
-            scorer = ExpertScorer(weighter, train_choir, discrete)
-        elif _scorer == "max":
-            scorer = MaxScorer()
-        elif _scorer == "avg-top":
-            k = sampler.discrete(1, n_submits, "k-avg-top")
-            strict = sampler.boolean("strict")
-            scorer = AverageTopScorer(k, strict)
-        elif _scorer == "sum-top":
-            k = sampler.discrete(1, n_submits, "k-sum-top")
-            scorer = AggregateTopScorer(k)
-        else:
-            raise Exception()
-
-        # ---- VALIDATOR ------------------------------------------------
-        _validator = sampler.categorical(
-            ["non-zero", "threshold", "constant", "majority"], "validator"
-        )
-        if _validator == "non-zero":
-            validator = NonZeroValidator()
-        elif _validator == "threshold":
-            if sampler.boolean("use-disc-thresholds"):  # _weighter == "uniform":
-                thresholds = sampler.multisample(
-                    ENTITIES + RELATIONS,
-                    sampler.discrete,
-                    handle="disc-thresholds",
-                    min=0,
-                    max=n_submits,
-                )
+            # ---- WEIGHTER -------------------------------------------------
+            _weighter = sampler.categorical(["uniform", "f1"], "weighter")
+            if _weighter == "uniform":
+                weighter = UniformWeighter.build()
+            elif _weighter == "f1":
+                weighter = cached_f1_weighter  # F1Weighter.build(choir)
             else:
-                thresholds = sampler.multisample(
-                    ENTITIES + RELATIONS,
-                    sampler.continuous,
-                    handle="cont-thresholds",
-                    min=0,
-                    max=1,
-                )
-            validator = ThresholdValidator(thresholds)
-        elif _validator == "constant":
-            threshold = (
-                sampler.discrete(0, n_submits, "disc-threshold")
-                if sampler.boolean("use-disc-threshold")  # if _weighter == "uniform"
-                else sampler.continuous(0, 1, "cont-threshold")
-            )
-            validator = ConstantThresholdValidator(threshold)
-        elif _validator == "majority":
-            validator = MajorityValidator(n_submits)
-        else:
-            raise Exception()
+                raise Exception()
 
-        # ==== ENSEMBLER ================================================
-        ensembler = ManualVotingEnsembler(
-            train_choir, orchestrator, weighter, scorer, validator
-        )
+            # ---- SCORER ---------------------------------------------------
+            _scorer = sampler.categorical(
+                ["avg", "sum", "expert", "max", "avg-top", "sum-top"], "scorer"
+            )
+            if _scorer == "avg":
+                scorer = AverageScorer()
+            elif _scorer == "sum":
+                scorer = SumScorer()
+            elif _scorer == "expert":
+                discrete = sampler.boolean("discrete-expert")
+                scorer = ExpertScorer(weighter, train_choir, discrete)
+            elif _scorer == "max":
+                scorer = MaxScorer()
+            elif _scorer == "avg-top":
+                k = sampler.discrete(1, n_submits, "k-avg-top")
+                strict = sampler.boolean("strict")
+                scorer = AverageTopScorer(k, strict)
+            elif _scorer == "sum-top":
+                k = sampler.discrete(1, n_submits, "k-sum-top")
+                scorer = AggregateTopScorer(k)
+            else:
+                raise Exception()
+
+            # ---- VALIDATOR ------------------------------------------------
+            _validator = sampler.categorical(
+                ["non-zero", "threshold", "constant", "majority"], "validator"
+            )
+            if _validator == "non-zero":
+                validator = NonZeroValidator()
+            elif _validator == "threshold":
+                if sampler.boolean("use-disc-thresholds"):  # _weighter == "uniform":
+                    thresholds = sampler.multisample(
+                        ENTITIES + RELATIONS,
+                        sampler.discrete,
+                        handle="disc-thresholds",
+                        min=0,
+                        max=n_submits,
+                    )
+                else:
+                    thresholds = sampler.multisample(
+                        ENTITIES + RELATIONS,
+                        sampler.continuous,
+                        handle="cont-thresholds",
+                        min=0,
+                        max=1,
+                    )
+                validator = ThresholdValidator(thresholds)
+            elif _validator == "constant":
+                threshold = (
+                    sampler.discrete(0, n_submits, "disc-threshold")
+                    if sampler.boolean(
+                        "use-disc-threshold"
+                    )  # if _weighter == "uniform"
+                    else sampler.continuous(0, 1, "cont-threshold")
+                )
+                validator = ConstantThresholdValidator(threshold)
+            elif _validator == "majority":
+                validator = MajorityValidator(n_submits)
+            else:
+                raise Exception()
+
+            # ==== ENSEMBLER ================================================
+            ensembler = ManualVotingEnsembler(
+                train_choir, orchestrator, weighter, scorer, validator
+            )
+
+        elif learning:
+            orchestrator = EnsembleOrchestrator(binary=True)
+
+            reference = orchestrator(choir)
+
+            _model_type = sampler.categorical(
+                ["randf", "svc", "logistic"], "model-type"
+            )
+            if _model_type == "randf":
+                model_type = RandomForestClassifier
+            elif _model_type == "svc":
+                model_type = SVC
+            elif _model_type == "logistic":
+                model_type = LogisticRegression
+
+            mode = sampler.categorical(["all", "category", "each"], "training-mode")
+
+            weighting_table = (
+                cached_f1_weighter.table
+                if sampler.boolean("weight-learning-votes")
+                else None
+            )
+
+            predictor = get_trained_predictor(
+                reference, model_type, mode=mode, weighting_table=weighting_table
+            )
+
+            # ==== ENSEMBLER ================================================
+            ensembler = PredictiveEnsembler(choir, orchestrator, predictor)
+
         return SampleModel(sampler, ensembler)
 
     def fn(generated: SampleModel):
@@ -231,8 +295,18 @@ def build_generator_and_fn(choir: EnsembleChoir, gold: Collection = None):
     return generator, fn
 
 
-def optimize_sampler_fn(choir: EnsembleChoir, gold: Collection, generations, pop_size):
-    generator, fn = build_generator_and_fn(choir, gold)
+def optimize_sampler_fn(
+    choir: EnsembleChoir,
+    gold: Collection,
+    *,
+    generations,
+    pop_size,
+    manual_voting=True,
+    learning=True,
+):
+    generator, fn = build_generator_and_fn(
+        choir, gold, manual_voting=manual_voting, learning=learning
+    )
     search = PESearch(
         generator_fn=generator,
         fitness_fn=fn,
@@ -245,3 +319,18 @@ def optimize_sampler_fn(choir: EnsembleChoir, gold: Collection, generations, pop
     loggers = [ProgressLogger(), ConsoleLogger()]
     best, best_fn = search.run(generations=generations, logger=loggers)
     return best, best_fn
+
+
+def get_custom_ensembler(
+    choir: EnsembleChoir,
+    gold: Collection,
+    configuration: dict,
+    manual_voting=True,
+    learning=True,
+):
+    generator, _ = build_generator_and_fn(
+        choir, gold, manual_voting=manual_voting, learning=learning
+    )
+    sampler = LockedSampler(configuration)
+    sample_model = generator(sampler, log=False)
+    return sample_model.model

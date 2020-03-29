@@ -31,14 +31,17 @@ from scripts.ensemble.ensemblers import (
     UniformWeighter,
     YesToAllScorer,
 )
-from scripts.ensemble.features import model_handler_assistant
 from scripts.ensemble.learning import (
     IsolatedPredictor,
     ModelTrainer,
     PredictiveEnsembler,
     TrainedPredictor,
 )
-from scripts.ensemble.optimization import optimize_sampler_fn
+from scripts.ensemble.optimization import (
+    get_custom_ensembler,
+    get_trained_predictor,
+    optimize_sampler_fn,
+)
 from scripts.ensemble.utils import (
     extract_submissions,
     keep_annotated_sentences,
@@ -125,33 +128,25 @@ def get_union_ensembler(choir: EnsembleChoir, binary: bool):
     return ensembler
 
 
-def get_trained_predictor(
-    reference: EnsembledCollection,
-    model_type,
-    mode: Literal["category", "all", "each"],
-    ignore=(),
-):
-    handler = model_handler_assistant(
-        voters=reference.choir.submissions.keys(),
-        model_init=lambda: model_type(random_state=0),
-        mode=mode,
-    )
-
-    return TrainedPredictor(
-        reference, 0.5, trainer=ModelTrainer(handler), ignore=ignore
-    )
-
-
 def get_sklearn_ensembler(
     choir: EnsembleChoir,
     model_type,
     mode: Literal["category", "all", "each"],
     ignore=(),
+    weighting_table=None,
+    **kargs,
 ):
     orchestrator = EnsembleOrchestrator(binary=True)
 
     reference = orchestrator(choir)
-    predictor = get_trained_predictor(reference, model_type, mode, ignore=ignore)
+    predictor = get_trained_predictor(
+        reference,
+        model_type,
+        mode=mode,
+        ignore=ignore,
+        weighting_table=weighting_table,
+        **kargs,
+    )
 
     ensembler = PredictiveEnsembler(choir, orchestrator, predictor)
     return ensembler
@@ -164,14 +159,26 @@ def get_isolated_ensembler(
     model_type,
     mode: Literal["category", "all", "each"],
     ignore=(),
+    weighting_table=None,
+    **kargs,
 ):
     orchestrator = EnsembleOrchestrator(binary=True)
 
     taskA_predictor = get_trained_predictor(
-        orchestrator(taskA_choir), model_type, mode, ignore=ignore
+        orchestrator(taskA_choir),
+        model_type,
+        mode=mode,
+        ignore=ignore,
+        weighting_table=weighting_table,
+        **kargs,
     )
     taskB_predictor = get_trained_predictor(
-        orchestrator(taskB_choir), model_type, mode, ignore=ignore
+        orchestrator(taskB_choir),
+        model_type,
+        mode=mode,
+        ignore=ignore,
+        weighting_table=weighting_table,
+        **kargs,
     )
     predictor = IsolatedPredictor(taskA_predictor, taskB_predictor)
 
@@ -362,6 +369,12 @@ if __name__ == "__main__":
     # ensembler = get_participant_ensembler(choir, binary=True, name="talp/576640")
     # ensembler = get_union_ensembler(choir, binary=False)
     # ensembler = get_sklearn_ensembler(choir, model_type=SVC, mode="all")
+    # ensembler = get_sklearn_ensembler(
+    #     choir,
+    #     model_type=RandomForestClassifier,
+    #     mode="category",
+    #     weighting_table=F1Weighter.build(choir).table,
+    # )
     # ensembler = get_isolated_ensembler(
     #     choir,
     #     taskA_choir,
@@ -375,6 +388,19 @@ if __name__ == "__main__":
     # ensembler = get_multisource_ensembler(
     #     choir, taskA_choir, taskB_choir, model_type=LogisticRegression, mode="each"
     # )  # 0.6611026808295397
+    # ensembler = get_custom_ensembler(
+    #     choir,
+    #     choir.gold_annotated,
+    #     {
+    #         "load-best": True,
+    #         "top-best": False,
+    #         "n-submits": 2,
+    #         "submissions": ["uhmajakd/576721", "vsp/576661"],
+    #         "learning": True,
+    #         "model-type": "randf",
+    #         "training-mode": "category",
+    #     },
+    # )
 
     # task_run(ensembler, choir)
     # task_run(ensembler, validation)

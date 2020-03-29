@@ -12,14 +12,24 @@ class FeatureBuilder:
 
 
 class VotingFeatures(FeatureBuilder):
-    def __init__(self, voters):
+    def __init__(self, voters, weighter=None):
         self._voters = voters
+        self._weighter = weighter or (lambda x, y: 1)
 
-    def __call__(self, votes):
+    def __call__(self, votes_for_label):
+        votes, label = votes_for_label
         n_votes = len(self._voters)
         features = np.zeros(n_votes)
-        voted = [i for i, submit in enumerate(self._voters) if submit in votes]
-        features[voted] = 1
+        voted, weights = zip(
+            *[
+                (i, self._weighter(submit, label))
+                for i, submit in enumerate(self._voters)
+                if submit in votes
+            ]
+        )
+        voted = list(voted)
+        weights = list(weights)
+        features[voted] = weights
         return features
 
 
@@ -61,9 +71,16 @@ class ModelHandler:
 
 
 class PerCategoryModel(ModelHandler):
-    def __init__(self, *, voters, labels_per_category: Dict[str, list], model_init):
+    def __init__(
+        self,
+        *,
+        voters,
+        labels_per_category: Dict[str, list],
+        model_init,
+        weighter=None,
+    ):
         self._builders = {
-            category: self._get_builder_according_to_labels(labels, voters)
+            category: self._get_builder_according_to_labels(labels, voters, weighter)
             for category, labels in labels_per_category.items()
         }
         self._models = {category: model_init() for category in labels_per_category}
@@ -77,14 +94,14 @@ class PerCategoryModel(ModelHandler):
         )
 
     @classmethod
-    def _get_builder_according_to_labels(cls, labels, voters):
+    def _get_builder_according_to_labels(cls, labels, voters, weighter):
         if len(labels) > 1:
             return ConcatenatedFeatures(
                 (LabelFeatures(labels), cls._get_label),
-                (VotingFeatures(voters), cls._get_votes),
+                (VotingFeatures(voters, weighter), cls._get_votes),
             )
         else:
-            return WithHandler(VotingFeatures(voters), cls._get_votes)
+            return WithHandler(VotingFeatures(voters, weighter), cls._get_votes)
 
     @classmethod
     def _get_label(cls, item):
@@ -93,8 +110,8 @@ class PerCategoryModel(ModelHandler):
 
     @classmethod
     def _get_votes(cls, item):
-        _, votes = item
-        return votes
+        label, votes = item
+        return votes, label
 
     def __call__(self, annotation_votes, selected_sids=None):
         per_category = defaultdict(lambda: ([], [], [], []))
@@ -122,18 +139,22 @@ class PerCategoryModel(ModelHandler):
 
 
 class AllInOneModel(PerCategoryModel):
-    def __init__(self, *, voters, labels, model_init):
+    def __init__(self, *, voters, labels, model_init, weighter=None):
         super().__init__(
-            voters=voters, labels_per_category={"all": labels}, model_init=model_init
+            voters=voters,
+            labels_per_category={"all": labels},
+            model_init=model_init,
+            weighter=weighter,
         )
 
 
 class PerLabelModel(PerCategoryModel):
-    def __init__(self, *, voters, labels, model_init):
+    def __init__(self, *, voters, labels, model_init, weighter=None):
         super().__init__(
             voters=voters,
             labels_per_category={l: [l] for l in labels},
             model_init=model_init,
+            weighter=weighter,
         )
 
 
@@ -143,7 +164,15 @@ def model_handler_assistant(
     model_init,
     labels=ENTITIES + RELATIONS,
     mode: Literal["category", "all", "each"],
+    weighting_table: Dict[Tuple[str, str], float] = None,
 ):
+
+    weighter = (
+        (lambda submit, label: weighting_table[submit, label])
+        if weighting_table is not None
+        else None
+    )
+
     if mode == "category":
         labels_per_category = defaultdict(list)
         for label in labels:
@@ -157,14 +186,15 @@ def model_handler_assistant(
             voters=voters,
             labels_per_category=labels_per_category,
             model_init=model_init,
+            weighter=weighter,
         )
     elif mode == "all":
         return lambda: AllInOneModel(
-            voters=voters, labels=labels, model_init=model_init
+            voters=voters, labels=labels, model_init=model_init, weighter=weighter
         )
     elif mode == "each":
         return lambda: PerLabelModel(
-            voters=voters, labels=labels, model_init=model_init
+            voters=voters, labels=labels, model_init=model_init, weighter=weighter
         )
     else:
         raise ValueError("Unknown mode: {mode}")

@@ -274,6 +274,8 @@ def build_generator_and_fn(
                 model_type = SVC
             elif _model_type == "logistic":
                 model_type = LogisticRegression
+            else:
+                raise Exception()
 
             mode = sampler.categorical(["all", "category", "each"], "training-mode")
 

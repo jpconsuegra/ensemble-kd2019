@@ -36,7 +36,7 @@ def score_annotations(votes):
     return accum / n_anns
 
 
-def normalize(sentences, choir):
+def normalize_scores(sentences, choir):
     return [
         (sid, sentence, score / len(choir.submissions))
         for sid, sentence, score in sentences
@@ -56,7 +56,7 @@ def performance_per_agreement(ensembled: EnsembledCollection, *, normalized=Fals
     collection = Collection()
 
     ordered = sort_sentences(ensembled, reverse=True)
-    ordered = normalize(ordered, ensembled.choir) if normalized else ordered
+    ordered = normalize_scores(ordered, ensembled.choir) if normalized else ordered
 
     yield dict(top=0, score=1, f1=1)
     for i, (sid, _, score) in enumerate(ordered, 1):
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     collection = orchestrator(choir)
 
     sentences = sort_sentences(collection)
-    normalized = normalize(sentences, choir)
+    normalized = normalize_scores(sentences, choir)
 
     for sid, s, score in normalized:
         print(f"{sid:4}\t{s.text}\t{score}")

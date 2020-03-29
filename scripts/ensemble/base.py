@@ -1,7 +1,7 @@
 import warnings
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from scripts.score import compute_metrics, subtaskA, subtaskB
 from scripts.utils import Collection, CollectionHandler, Keyphrase, Relation, Sentence
@@ -412,7 +412,9 @@ class Ensembler:
     def choir(self):
         return self._choir
 
-    def __call__(self, choir: EnsembleChoir = None, collection_only=True) -> Collection:
+    def __call__(
+        self, choir: EnsembleChoir = None, collection_only=True
+    ) -> Union[Collection, EnsembledCollection]:
         choir = choir if choir is not None else self._choir
         to_ensemble = self._orchestrator(choir)
         ensembled = self._ensemble(to_ensemble)

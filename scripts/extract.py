@@ -67,6 +67,14 @@ def performance_per_agreement(ensembled: EnsembledCollection, *, normalized=Fals
         yield dict(top=i, score=score, f1=EnsembleChoir.evaluate(collection, gold))
 
 
+def plot_performance(sequence, order=["score", "top", "f1"]):
+    items = sorted(tuple(s[x] for x in order) for s in sequence)
+    X = [s[0] for s in items]
+    Y = [s[2] for s in items]
+    plt.plot(X, Y)
+    plt.savefig(f"performance-per-agreement-{'-'.join(order)}.pdf")
+
+
 if __name__ == "__main__":
     ps = Path("./data/ehealth2019/submissions/all")
     pg = Path("./data/ehealth2019/testing")

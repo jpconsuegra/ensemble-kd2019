@@ -45,7 +45,7 @@ from scripts.ensemble.utils import (
     keep_best_per_participant,
     keep_top_k_submissions,
 )
-from scripts.extract import performance_per_agreement
+from scripts.extract import performance_per_agreement, plot_performance
 from scripts.utils import (
     Collection,
     CollectionHandler,
@@ -303,8 +303,14 @@ def task_extract(
 def task_performance_per_agreement(ensembler: Ensembler, target: EnsembleChoir):
     target = keep_annotated_sentences(target)
     ensembled = ensembler(target, collection_only=False)
+
+    sequence = []
     for item in performance_per_agreement(ensembled, normalized=True):
         print(item)
+        sequence.append(item)
+
+    plot_performance(sequence)
+    # plot_performance(sequence, order=["top", "score", "f1"])
 
 
 if __name__ == "__main__":

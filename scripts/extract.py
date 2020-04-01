@@ -1,3 +1,4 @@
+import warnings
 from collections import defaultdict
 from pathlib import Path
 
@@ -51,14 +52,16 @@ def plot(sentences, name, **kargs):
     plt.close()
 
 
-def performance_per_agreement(ensembled: EnsembledCollection, *, normalized=False):
+def performance_per_agreement(
+    ensembled: EnsembledCollection, *, normalized=False, reverse=True
+):
     gold = Collection()
     collection = Collection()
 
-    ordered = sort_sentences(ensembled, reverse=True)
+    ordered = sort_sentences(ensembled, reverse=reverse)
     ordered = normalize_scores(ordered, ensembled.choir) if normalized else ordered
 
-    yield dict(top=0, score=1, f1=1)
+    # yield dict(top=0, score=int(reverse), f1=int(reverse))
     for i, (sid, _, score) in enumerate(ordered, 1):
         gold_sent = ensembled.choir.gold.sentences[sid]
         ensembled_sent = ensembled.collection.sentences[sid]
@@ -67,11 +70,20 @@ def performance_per_agreement(ensembled: EnsembledCollection, *, normalized=Fals
         yield dict(top=i, score=score, f1=EnsembleChoir.evaluate(collection, gold))
 
 
-def plot_performance(sequence, order=["score", "top", "f1"]):
-    items = sorted(tuple(s[x] for x in order) for s in sequence)
-    X = [s[0] for s in items]
-    Y = [s[2] for s in items]
-    plt.plot(X, Y)
+def plot_performance(
+    sequences, order=["top", "score", "f1"], linestyle="-", marker=None, alpha=1.0
+):
+    if order == ["score", "top", "f1"]:
+        warnings.warn("Are you sure you meant to use ['score', 'top', 'f1']?")
+
+    plt.xlabel(order[0].title())
+    plt.ylabel(order[2].title())
+    for label, sequence in sequences.items():
+        items = sorted(tuple(s[x] for x in order) for s in sequence)
+        X = [s[0] for s in items]
+        Y = [s[2] for s in items]
+        plt.plot(X, Y, label=label, linestyle=linestyle, marker=marker, alpha=alpha)
+    plt.legend()
     plt.savefig(f"performance-per-agreement-{'-'.join(order)}.pdf")
 
 

@@ -314,18 +314,40 @@ def task_extract(
         )
 
 
-def task_performance_per_agreement(ensembler: Ensembler, target: EnsembleChoir):
-    target = keep_annotated_sentences(target)
-    ensembled = ensembler(target, collection_only=False)
+def task_performance_per_agreement(
+    ensembler: Ensembler,
+    score=False,
+    linestyle="-",
+    marker=None,
+    alpha=1.0,
+    **targets: EnsembleChoir,
+):
+    sequences = {}
 
-    sequence = []
-    for item in performance_per_agreement(ensembled, normalized=True):
-        print(item)
-        sequence.append(item)
+    for label, target in targets.items():
+        target = keep_annotated_sentences(target)
+        ensembled = ensembler(target, collection_only=False)
 
-    plot_performance(sequence)
-    # plot_performance(sequence, order=["top", "score", "f1"])
+        for direction in ["top higher", "top lower"]:
+            sequence = []
+            for item in performance_per_agreement(
+                ensembled, normalized=True, reverse=(direction == "top higher")
+            ):
+                print(item)
+                sequence.append(item)
 
+            sequences[f"{label} ({direction})"] = sequence
+
+    if score:
+        plot_performance(
+            sequences,
+            order=["score", "top", "f1"],
+            linestyle=linestyle,
+            marker=marker,
+            alpha=alpha,
+        )
+    else:
+        plot_performance(sequences, linestyle=linestyle, marker=marker, alpha=alpha)
 
 def task_do_ensemble(ensembler: Ensembler, target: EnsembleChoir):
     ensembled = ensembler(target, collection_only=False)
@@ -430,8 +452,9 @@ if __name__ == "__main__":
     # task_run(ensembler, choir)
     # task_run(ensembler, validation)
     # task_validate_submission(validation, "talp", validation.gold)
-    # task_performance_per_agreement(ensembler, choir)
-    # task_performance_per_agreement(ensembler, validation)
+    # task_performance_per_agreement(
+    #     ensembler, score=False, reference=choir, validation=validation, alpha=0.7,
+    # )
     # optimize_sampler_fn(
     #     choir,
     #     choir.gold_annotated,

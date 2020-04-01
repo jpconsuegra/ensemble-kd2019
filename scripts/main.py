@@ -205,10 +205,17 @@ def get_multisource_ensembler(
     return get_isolated_ensembler(choir, taskA_choir, taskB_choir, model_type, mode)
 
 
-def task_run(ensembler: Ensembler, target: EnsembleChoir):
+def task_run(ensembler: Ensembler, target: EnsembleChoir, scenario="1-main"):
     ensembled = ensembler(target)
     print(
-        "==== SCORE ====\n", EnsembleChoir.evaluate(ensembled, target.gold, clamp=True)
+        "==== SCORE ====\n",
+        EnsembleChoir.evaluate(
+            ensembled,
+            target.gold,
+            clamp=True,
+            skipA=scenario == "3-taskB",
+            skipB=scenario == "2-taskA",
+        ),
     )
 
 
@@ -390,6 +397,7 @@ if __name__ == "__main__":
     #     path2ehealth20_ann,
     # )
 
+    scenario = ["1-main", "2-taskA", "3-taskB"][1]
     ref_submissions = path2ehealth20_submissions
     ref_test = path2ehealth20_gold
     val_submissions = path2ehealth19_submissions
@@ -405,7 +413,9 @@ if __name__ == "__main__":
     print("======== Done! =================================")
 
     print(f"======== Loading ... (validation) ==============")
-    validation = EnsembleChoir().load(CollectionV1Handler, val_submissions, val_test)
+    validation = EnsembleChoir().load(
+        CollectionV1Handler, val_submissions, val_test, scenario=scenario
+    )
     print("======== Done! =================================")
 
     # # BEST
@@ -420,6 +430,8 @@ if __name__ == "__main__":
     # ensembler = get_f1_ensembler(choir, binary=True)
     # ensembler = get_participant_ensembler(choir, binary=True, name="talp/576640")
     # ensembler = get_union_ensembler(choir, binary=False)
+    # ensembler = get_gold_ensembler(choir, binary=True)
+    # ensembler = get_gold_ensembler(validation, binary=True)
     # ensembler = get_sklearn_ensembler(choir, model_type=SVC, mode="all")
     # ensembler = get_sklearn_ensembler(
     #     choir,
@@ -454,8 +466,8 @@ if __name__ == "__main__":
     #     learning=True,
     # )
 
-    # task_run(ensembler, choir)
-    # task_run(ensembler, validation)
+    # task_run(ensembler, choir, scenario=scenario)
+    # task_run(ensembler, validation, scenario=scenario)
     # task_validate_submission(validation, "talp", validation.gold)
     # task_performance_per_agreement(
     #     ensembler, score=False, reference=choir, validation=validation, alpha=0.7,

@@ -349,7 +349,8 @@ def task_performance_per_agreement(
     else:
         plot_performance(sequences, linestyle=linestyle, marker=marker, alpha=alpha)
 
-def task_do_ensemble(ensembler: Ensembler, target: EnsembleChoir):
+
+def task_do_ensemble(ensembler: Ensembler, target: EnsembleChoir, top=None):
     ensembled = ensembler(target, collection_only=False)
     sentences = []
     scores = []
@@ -360,11 +361,15 @@ def task_do_ensemble(ensembler: Ensembler, target: EnsembleChoir):
         if sentence.annotated:
             sentences.append(sentence)
             scores.append(score)
+
+    sentences = sentences if top is None else sentences[:top]
+    scores = scores if top is None else scores[:top]
+
     output_collection = Collection(sentences)
 
     opath = "./data/ensemble/ensemble.{}"
     CollectionV2Handler.dump(output_collection, Path(opath.format("txt")))
-    Path(opath.format("order")).write_text("\n".join(str(s) for s in scores))
+    Path(opath.format("scr")).write_text("\n".join(str(s) for s in scores))
 
 
 if __name__ == "__main__":
@@ -478,5 +483,5 @@ if __name__ == "__main__":
     # print(len(choir.gold), len(choir.gold_annotated))
     # output = exclude_from(output, choir.gold_annotated)
     # print(len(output.gold))
-    # task_do_ensemble(ensembler, output)
-    # # Hay oraciones que estan tanto en el test viejo como en el nuevo!!!
+    # task_do_ensemble(ensembler, output, top=3000)
+    # Hay oraciones que estan tanto en el test viejo como en el nuevo!!!

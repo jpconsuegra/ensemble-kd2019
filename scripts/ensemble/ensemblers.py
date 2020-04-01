@@ -102,7 +102,7 @@ class UniformWeighter(TableWeighter):
 class F1Weighter(TableWeighter):
     @classmethod
     def build(cls, choir: EnsembleChoir, *, entities=ENTITIES, relations=RELATIONS):
-        table = {}
+        table = defaultdict(int)
         for label in ENTITIES + RELATIONS:
             for name, submit in choir.submissions.items():
                 table[name, label] = cls._score(

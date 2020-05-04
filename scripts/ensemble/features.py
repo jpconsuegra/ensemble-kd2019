@@ -20,13 +20,19 @@ class VotingFeatures(FeatureBuilder):
         votes, label = votes_for_label
         n_votes = len(self._voters)
         features = np.zeros(n_votes)
-        voted, weights = zip(
+        select_votes = zip(
             *[
                 (i, self._weighter(submit, label))
                 for i, submit in enumerate(self._voters)
                 if submit in votes
             ]
         )
+
+        try:
+            voted, weights = select_votes
+        except ValueError:
+            voted, weights = [], []
+
         voted = list(voted)
         weights = list(weights)
         features[voted] = weights

@@ -20,6 +20,7 @@ def do(
     pop_size=10,
     manual_voting=True,
     learning=True,
+    configuration=None,
 ):
     (
         ref_submissions,
@@ -43,19 +44,24 @@ def do(
     )
     print(" Done! ".center(48, "="))
 
-    print(" Optimizing ".center(48, "="))
-    best, best_fd = optimize_sampler_fn(
-        choir,
-        choir.gold_annotated,
-        generations=generations,
-        pop_size=pop_size,
-        manual_voting=manual_voting,
-        learning=learning,
-    )
-    print(f" Done! With F1: {best_fd} ".center(48, "="))
+    if configuration is None:
+        print(" Optimizing ".center(48, "="))
+        best, best_fd = optimize_sampler_fn(
+            choir,
+            choir.gold_annotated,
+            generations=generations,
+            pop_size=pop_size,
+            manual_voting=manual_voting,
+            learning=learning,
+        )
+        print(f" Done! With F1: {best_fd} ".center(48, "="))
 
-    print(" Ensembling target collection ".center(48, "="))
-    ensembler = best.model
+        print(" Ensembling target collection ".center(48, "="))
+        ensembler = best.model
+
+    else:
+        ensembler = get_custom_ensembler(choir, target, configuration,)
+
     ensembled = ensembler(target)
     print(" Done! ".center(48, "="))
 

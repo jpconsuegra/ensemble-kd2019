@@ -326,6 +326,7 @@ def optimize_sampler_fn(
         search_timeout=0,
         allow_duplicates=False,
         pop_size=pop_size,
+        errors='ignore'
     )
     loggers = [ProgressLogger(), ConsoleLogger()]
     best, best_fn = search.run(generations=generations, logger=loggers)

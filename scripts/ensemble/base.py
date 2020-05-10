@@ -67,6 +67,8 @@ class EnsembleChoir:
             print("No submission directory provided!")
             return
         for userfolder in submits.iterdir():
+            if not userfolder.is_dir():
+                continue
             submit = self._load_user_submit(handler, userfolder, scenario, best=best)
             self._update_submissions(submit)
 

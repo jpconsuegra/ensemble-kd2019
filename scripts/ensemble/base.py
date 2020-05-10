@@ -127,15 +127,18 @@ class EnsembleChoir:
     ):
         if clamp:
             sentences = []
+            submit = submit.clone()
             for gold_sent in gold.sentences:
-                matches = submit.find_matches(gold_sent.text)
+                matches = submit.find_matches(gold_sent.text, get_id=True)
                 if not matches:
                     warnings.warn("Sentence not found!")
                     sentences.append(Sentence(gold_sent.text))
                 elif len(matches) > 1:
-                    raise Exception("Ambiguous collection")
-                else:
-                    sentences.append(matches[0])
+                    warnings.warn("Ambiguous collection")
+                sentence, sid = matches[0]
+                sentences.append(sentence)
+                del submit.sentences[sid]
+
             submit = Collection(sentences)
 
         results = cls.evaluate_scenario(submit, gold, skipA=skipA, skipB=skipB)

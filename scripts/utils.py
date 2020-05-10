@@ -180,11 +180,12 @@ class Sentence:
     def fix_ids(self, start=1):
         next_id = start
 
-        for k in self.keyphrases:
-            for r in self.relations:
-                if r.origin == k.id:
+        copy = self.clone()
+        for k, kc in zip(self.keyphrases, copy.keyphrases):
+            for r, rc in zip(self.relations, copy.relations):
+                if rc.origin == kc.id:
                     r.origin = next_id
-                if r.destination == k.id:
+                if rc.destination == kc.id:
                     r.destination = next_id
 
             k.id = next_id
@@ -380,8 +381,12 @@ class Collection:
         matches = self.find_matches(text)
         return None if not matches else matches[0]
 
-    def find_matches(self, text) -> List[Sentence]:
-        return [s for s in self.sentences if s.text == text]
+    def find_matches(self, text, get_id=False) -> List[Sentence]:
+        return [
+            (s, sid) if get_id else s
+            for sid, s in enumerate(self.sentences)
+            if s.text == text
+        ]
 
     def load(self, finput: Path) -> "Collection":
         return CollectionV1Handler.load(self, finput)

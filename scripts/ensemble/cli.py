@@ -11,6 +11,7 @@ def do(
     ref_submissions: Path,
     ref_gold: Path,
     ref_version: int,
+    ref_scenario: str,
     target_submissions: Path,
     target_gold: Path,
     target_version: int,
@@ -34,7 +35,9 @@ def do(
 
     handler1 = get_handler(ref_version)
     print(f" Loading ... (reference) ".center(48, "="))
-    choir = EnsembleChoir().load(handler1, ref_submissions, ref_gold)
+    choir = EnsembleChoir().load(
+        handler1, ref_submissions, ref_gold, scenario=ref_scenario
+    )
     print(" Done! ".center(48, "="))
 
     handler2 = get_handler(target_version)

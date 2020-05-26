@@ -12,10 +12,12 @@ def do(
     ref_gold: Path,
     ref_version: int,
     ref_scenario: str,
+    ref_cname: str,
     target_submissions: Path,
     target_gold: Path,
     target_version: int,
     target_scenario: str,
+    target_cname: str,
     output_text: Path,
     generations=500,
     pop_size=10,
@@ -36,14 +38,18 @@ def do(
     handler1 = get_handler(ref_version)
     print(f" Loading ... (reference) ".center(48, "="))
     choir = EnsembleChoir().load(
-        handler1, ref_submissions, ref_gold, scenario=ref_scenario
+        handler1, ref_submissions, ref_gold, scenario=ref_scenario, cname=ref_cname
     )
     print(" Done! ".center(48, "="))
 
     handler2 = get_handler(target_version)
     print(f" Loading ... (target) ".center(48, "="))
     target = EnsembleChoir().load(
-        handler2, target_submissions, target_gold, scenario=target_scenario
+        handler2,
+        target_submissions,
+        target_gold,
+        scenario=target_scenario,
+        cname=target_cname,
     )
     print(" Done! ".center(48, "="))
 

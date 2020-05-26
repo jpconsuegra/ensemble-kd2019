@@ -31,9 +31,12 @@ class EnsembleChoir:
         gold: Path,
         *,
         scenario="1-main",
+        cname="",
         best=False,
     ):
-        self._load_data(handler, submits, gold, scenario=scenario, best=best)
+        self._load_data(
+            handler, submits, gold, scenario=scenario, cname=cname, best=best
+        )
         return self
 
     def _load_data(
@@ -43,10 +46,11 @@ class EnsembleChoir:
         gold: Path,
         *,
         scenario="1-main",
+        cname="",
         best=False,
     ):
         self._load_gold(handler, gold, scenario)
-        self._load_submissions(handler, submits, scenario, best=best)
+        self._load_submissions(handler, submits, scenario, cname, best=best)
 
     def _load_gold(self, handler: CollectionHandler, gold: Path, scenario="1-main"):
         gold_collection = handler.load_dir(Collection(), gold / f"scenario{scenario}")
@@ -60,6 +64,7 @@ class EnsembleChoir:
         handler: CollectionHandler,
         submits: Path,
         scenario="1-main",
+        cname="",
         *,
         best=False,
     ):
@@ -69,7 +74,9 @@ class EnsembleChoir:
         for userfolder in submits.iterdir():
             if not userfolder.is_dir():
                 continue
-            submit = self._load_user_submit(handler, userfolder, scenario, best=best)
+            submit = self._load_user_submit(
+                handler, userfolder, scenario, cname, best=best
+            )
             self._update_submissions(submit)
 
     def _update_submissions(self, submit, strict=False):
@@ -87,11 +94,12 @@ class EnsembleChoir:
         handler: CollectionHandler,
         userfolder: Path,
         scenario="1-main",
+        cname="",
         *,
         best=False,
     ):
         submissions = {}
-        for submit in userfolder.iterdir():
+        for submit in (userfolder / cname).iterdir():
             collection = handler.load_dir(Collection(), submit / f"scenario{scenario}")
             name = f"{userfolder.name}/{submit.name}"
             if self._is_invalid(collection, name):

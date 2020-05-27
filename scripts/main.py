@@ -357,7 +357,9 @@ def task_performance_per_agreement(
         plot_performance(sequences, linestyle=linestyle, marker=marker, alpha=alpha)
 
 
-def task_do_ensemble(ensembler: Ensembler, target: EnsembleChoir, top=None):
+def task_do_ensemble(
+    ensembler: Ensembler, target: EnsembleChoir, top=None, opath: Path = None
+):
     ensembled = ensembler(target, collection_only=False)
     sentences = []
     scores = []
@@ -374,9 +376,10 @@ def task_do_ensemble(ensembler: Ensembler, target: EnsembleChoir, top=None):
 
     output_collection = Collection(sentences)
 
-    opath = "./data/ensemble/ensemble.{}"
-    CollectionV2Handler.dump(output_collection, Path(opath.format("txt")))
-    Path(opath.format("scr")).write_text("\n".join(str(s) for s in scores))
+    opath = Path("./data/ensemble/ensemble.txt") if opath is None else opath
+    CollectionV2Handler.dump(output_collection, opath)
+    scr_path: Path = opath.parent / (opath.stem + ".src")
+    scr_path.write_text("\n".join(str(s) for s in scores))
 
 
 if __name__ == "__main__":

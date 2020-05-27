@@ -4,6 +4,8 @@ import fire
 
 from scripts.ensemble import EnsembleChoir
 from scripts.ensemble.optimization import get_custom_ensembler, optimize_sampler_fn
+from scripts.ensemble.utils import exclude_from, keep_non_annotated_sentences
+from scripts.main import task_do_ensemble
 from scripts.utils import CollectionV1Handler, CollectionV2Handler
 
 
@@ -24,6 +26,8 @@ def do(
     manual_voting=True,
     learning=True,
     configuration=None,
+    exclude_gold_annotated: bool = False,
+    top: int = None,
 ):
     (
         ref_submissions,
@@ -42,6 +46,9 @@ def do(
     )
     print(" Done! ".center(48, "="))
 
+    print(f"Working on ({len(choir.submissions)}):")
+    print("\n".join(choir.submissions.keys()))
+
     handler2 = get_handler(target_version)
     print(f" Loading ... (target) ".center(48, "="))
     target = EnsembleChoir().load(
@@ -52,6 +59,9 @@ def do(
         cname=target_cname,
     )
     print(" Done! ".center(48, "="))
+
+    print(f"Working on ({len(target.submissions)}):")
+    print("\n".join(target.submissions.keys()))
 
     if configuration is None:
         print(" Optimizing ".center(48, "="))
@@ -69,13 +79,18 @@ def do(
         ensembler = best.model
 
     else:
-        ensembler = get_custom_ensembler(choir, target, configuration,)
+        ensembler = get_custom_ensembler(choir, target, configuration)
 
-    ensembled = ensembler(target)
-    print(" Done! ".center(48, "="))
+    if exclude_gold_annotated:
+        print(len(target.gold), len(target.gold_annotated))
+        target = keep_non_annotated_sentences(target)
+        print(len(target.gold))
+        print(len(choir.gold), len(choir.gold_annotated))
+        target = exclude_from(target, choir.gold_annotated)
+        print(len(target.gold))
 
-    print(f" Saving to {output_text} ".center(48, "="))
-    CollectionV2Handler.dump(ensembled, output_text)
+    print(f" Ensembling to {output_text} ".center(48, "="))
+    task_do_ensemble(ensembler, target, top=top, opath=output_text)
     print(" Done! ".center(48, "="))
 
 

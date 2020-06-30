@@ -347,6 +347,21 @@ class Collection:
         clone.sentences.extend(sentences)
         return clone
 
+    def complete_from(self, *collections: "Collection"):
+        clone = self.clone()
+        for c in collections:
+            for s in c.sentences:
+                if not s.annotated:
+                    continue
+                for match in clone.find_matches(s.text):
+                    if not match.annotated:
+                        match.keyphrases.extend(s.keyphrases)
+                        match.relations.extend(s.relations)
+                        break
+                else:
+                    warnings.warn(f"In `complete_from`, match not found for:\n {s.text}")
+        return clone
+
     def __len__(self):
         return len(self.sentences)
 

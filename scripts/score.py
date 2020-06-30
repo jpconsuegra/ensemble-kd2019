@@ -5,34 +5,41 @@ import warnings
 from collections import OrderedDict
 from pathlib import Path
 
-from .utils import Collection, DisjointSet
+from .utils import Collection, DisjointSet, ENTITIES, RELATIONS
 
-CORRECT_A = 'correct_A'
-INCORRECT_A = 'incorrect_A'
-PARTIAL_A = 'partial_A'
-SPURIOUS_A = 'spurious_A'
-MISSING_A = 'missing_A'
+CORRECT_A = "correct_A"
+INCORRECT_A = "incorrect_A"
+PARTIAL_A = "partial_A"
+SPURIOUS_A = "spurious_A"
+MISSING_A = "missing_A"
 
-CORRECT_B = 'correct_B'
-SPURIOUS_B = 'spurious_B'
-MISSING_B = 'missing_B'
+CORRECT_B = "correct_B"
+SPURIOUS_B = "spurious_B"
+MISSING_B = "missing_B"
 
-SAME_AS = 'same-as'
+SAME_AS = "same-as"
+
 
 def report(data, verbose):
     for key, value in data.items():
-        print('{}: {}'.format(key, len(value)))
+        print("{}: {}".format(key, len(value)))
 
     if verbose:
         for key, value in data.items():
-            print('\n==================={}===================\n'.format(key.upper().center(14)))
+            print(
+                "\n==================={}===================\n".format(
+                    key.upper().center(14)
+                )
+            )
             if isinstance(value, dict):
-                print('\n'.join('{} --> {}'.format(x,y) for x,y in value.items()))
+                print("\n".join("{} --> {}".format(x, y) for x, y in value.items()))
             else:
-                print('\n'.join(str(x) for x in value))
+                print("\n".join(str(x) for x in value))
+
 
 def subtaskA(gold, submit, verbose=False):
     return match_keyphrases(gold, submit)
+
 
 def match_keyphrases(gold, submit, skip_incorrect=False):
     correct = {}
@@ -43,7 +50,10 @@ def match_keyphrases(gold, submit, skip_incorrect=False):
 
     for gold_sent, submit_sent in zip(gold.sentences, submit.sentences):
         if gold_sent.text != submit_sent.text:
-            warnings.warn("Wrong sentence: gold='%s' vs submit='%s'" % (gold_sent.text, submit_sent.text))
+            warnings.warn(
+                "Wrong sentence: gold='%s' vs submit='%s'"
+                % (gold_sent.text, submit_sent.text)
+            )
             continue
 
         if not gold_sent.keyphrases and not gold_sent.relations:
@@ -87,24 +97,32 @@ def match_keyphrases(gold, submit, skip_incorrect=False):
         missing.extend(gold_sent.keyphrases)
 
     return {
-        CORRECT_A : correct,
-        INCORRECT_A : incorrect,
-        PARTIAL_A : partial,
-        SPURIOUS_A : spurious,
-        MISSING_A : missing,
+        CORRECT_A: correct,
+        INCORRECT_A: incorrect,
+        PARTIAL_A: partial,
+        SPURIOUS_A: spurious,
+        MISSING_A: missing,
     }
+
 
 def find_partial_match(keyphrase, sentence):
     return next((match for match in sentence if partial_match(keyphrase, match)), None)
 
+
 def partial_match(keyphrase1, keyphrase2):
     match = False
-    match |= any(start <= x < end for start, end in keyphrase1.spans for x,_ in keyphrase2.spans)
-    match |= any(start <= x < end for start, end in keyphrase2.spans for x,_ in keyphrase1.spans)
+    match |= any(
+        start <= x < end for start, end in keyphrase1.spans for x, _ in keyphrase2.spans
+    )
+    match |= any(
+        start <= x < end for start, end in keyphrase2.spans for x, _ in keyphrase1.spans
+    )
     return match
+
 
 def subtaskB(gold, submit, data, verbose=False):
     return match_relations(gold, submit, data)
+
 
 def match_relations(gold, submit, data, skip_same_as=False, propagate_error=True):
     correct = {}
@@ -113,7 +131,10 @@ def match_relations(gold, submit, data, skip_same_as=False, propagate_error=True
 
     for gold_sent, submit_sent in zip(gold.sentences, submit.sentences):
         if gold_sent.text != submit_sent.text:
-            warnings.warn("Wrong sentence: gold='%s' vs submit='%s'" % (gold_sent.text, submit_sent.text))
+            warnings.warn(
+                "Wrong sentence: gold='%s' vs submit='%s'"
+                % (gold_sent.text, submit_sent.text)
+            )
             continue
 
         if not gold_sent.keyphrases and not gold_sent.relations:
@@ -151,7 +172,10 @@ def match_relations(gold, submit, data, skip_same_as=False, propagate_error=True
                 if relation.from_phrase not in found or relation.to_phrase not in found:
                     submit_sent.relations.remove(relation)
             for relation in gold_sent.relations[:]:
-                if relation.from_phrase not in found.values() or relation.to_phrase not in found.values():
+                if (
+                    relation.from_phrase not in found.values()
+                    or relation.to_phrase not in found.values()
+                ):
                     gold_sent.relations.remove(relation)
 
         # correct
@@ -167,15 +191,29 @@ def match_relations(gold, submit, data, skip_same_as=False, propagate_error=True
 
             match = gold_sent.find_relation(origin.id, destination.id, relation.label)
             if match is None and relation.label == SAME_AS:
-                match = gold_sent.find_relation(destination.id, origin.id, relation.label)
+                match = gold_sent.find_relation(
+                    destination.id, origin.id, relation.label
+                )
 
             if match is None:
                 origin = equivalence[origin].representative.value
                 destination = equivalence[destination].representative.value
 
-                match = find_relation(origin, destination, relation.label, gold_sent.relations, equivalence)
+                match = find_relation(
+                    origin,
+                    destination,
+                    relation.label,
+                    gold_sent.relations,
+                    equivalence,
+                )
                 if match is None and relation.label == SAME_AS:
-                    match = find_relation(destination, origin, relation.label, gold_sent.relations, equivalence)
+                    match = find_relation(
+                        destination,
+                        origin,
+                        relation.label,
+                        gold_sent.relations,
+                        equivalence,
+                    )
 
             if match:
                 correct[relation] = match
@@ -189,10 +227,11 @@ def match_relations(gold, submit, data, skip_same_as=False, propagate_error=True
         missing.extend(gold_sent.relations)
 
     return {
-        CORRECT_B : correct,
-        SPURIOUS_B : spurious,
-        MISSING_B : missing,
+        CORRECT_B: correct,
+        SPURIOUS_B: spurious,
+        MISSING_B: missing,
     }
+
 
 def map_keyphrase(keyphrase, data):
     try:
@@ -208,6 +247,7 @@ def map_keyphrase(keyphrase, data):
     except KeyError:
         pass
     return None
+
 
 def compute_metrics(data, skipA=False, skipB=False):
     correct = 0
@@ -241,11 +281,37 @@ def compute_metrics(data, skipA=False, skipB=False):
 
     f1 = f1_num / f1_den if f1_den > 0 else 0
 
-    return {
-        'recall': recall,
-        'precision': precision,
-        'f1': f1
-    }
+    return {"recall": recall, "precision": precision, "f1": f1}
+
+
+def compute_macro_f1(data, skipA=False, skipB=False):
+    scores = {}
+    if not skipA:
+        for label in ENTITIES:
+            subdata = {}
+            for key in [CORRECT_A, INCORRECT_A, PARTIAL_A, MISSING_A, SPURIOUS_A]:
+                subdata[key] = [x for x in data[key] if x.label == label]
+            scores[label] = compute_metrics(subdata, skipA=False, skipB=True)
+    if not skipB:
+        for label in RELATIONS:
+            subdata = {}
+            for key in [CORRECT_B, MISSING_B, SPURIOUS_B]:
+                subdata[key] = [x for x in data[key] if x.label == label]
+            scores[label] = compute_metrics(subdata, skipA=True, skipB=False)
+
+    return (
+        dict(
+            macro=sum(x["f1"] for x in scores.values()) / len(scores),
+            **{
+                f"{label}-{metric}": value
+                for label in scores
+                for metric, value in scores[label].items()
+            },
+        )
+        if not skipA or not skipB
+        else dict(macro=0)
+    )
+
 
 def find_relation(origin, destination, label, target_relations, target_equivalence):
     for relation in target_relations:
@@ -261,7 +327,8 @@ def find_relation(origin, destination, label, target_relations, target_equivalen
             return relation
     return None
 
-def main(gold_input, submit_input, skip_A, skip_B, verbose):
+
+def main(gold_input, submit_input, skip_A, skip_B, verbose, macro=False):
     gold = Collection()
     gold.load(gold_input)
 
@@ -280,22 +347,33 @@ def main(gold_input, submit_input, skip_A, skip_B, verbose):
         data.update(dataB)
         report(dataB, verbose)
 
-    print("-"*20)
+    print("-" * 20)
 
     metrics = compute_metrics(data, skip_A, skip_B)
+    if macro:
+        metrics.update(compute_macro_f1(data, skip_A, skip_B))
 
-    for key,value in metrics.items():
+    for key, value in metrics.items():
         print("{0}: {1:0.4}".format(key, value))
 
     return data
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('gold')
-    parser.add_argument('submit')
-    parser.add_argument('--skip-A', action='store_true')
-    parser.add_argument('--skip-B', action='store_true')
-    parser.add_argument('--verbose', action='store_true')
+    parser.add_argument("gold")
+    parser.add_argument("submit")
+    parser.add_argument("--skip-A", action="store_true")
+    parser.add_argument("--skip-B", action="store_true")
+    parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--macro", action="store_true")
     args = parser.parse_args()
-    main(Path(args.gold), Path(args.submit), args.skip_A, args.skip_B, args.verbose)
+    main(
+        Path(args.gold),
+        Path(args.submit),
+        args.skip_A,
+        args.skip_B,
+        args.verbose,
+        args.macro,
+    )
+

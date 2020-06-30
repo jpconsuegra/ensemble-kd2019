@@ -378,7 +378,7 @@ def task_do_ensemble(
 
     opath = Path("./data/ensemble/ensemble.txt") if opath is None else opath
     CollectionV2Handler.dump(output_collection, opath)
-    scr_path: Path = opath.parent / (opath.stem + ".src")
+    scr_path: Path = opath.parent / (opath.stem + ".scr")
     scr_path.write_text("\n".join(str(s) for s in scores))
 
 
@@ -414,6 +414,12 @@ if __name__ == "__main__":
     print(f"======== Loading ... (reference) ===============")
     choir = EnsembleChoir().load(CollectionV1Handler, ref_submissions, ref_test)
     print("======== Done! =================================")
+
+    # ehealth2020_gold = CollectionV1Handler.load(
+    #     Collection(), path2ehealth20_gold / "scenario1-main" / "input_scenario1.txt"
+    # )
+    # choir.gold = choir.gold.complete_from(ehealth2020_gold)
+    # validation = choir
 
     print(f"======== Loading ... (validation) ==============")
     validation = EnsembleChoir().load(
@@ -475,7 +481,7 @@ if __name__ == "__main__":
     # task_performance_per_agreement(
     #     ensembler, score=False, reference=choir, validation=validation, alpha=0.7,
     # )
-    # optimize_sampler_fn(
+    # best, best_fn = optimize_sampler_fn(
     #     choir,
     #     choir.gold_annotated,
     #     generations=500,
@@ -483,6 +489,7 @@ if __name__ == "__main__":
     #     manual_voting=True,
     #     learning=True,
     # )
+    # ensembler = best.model
     # task_cross_validate(
     #     choir,
     #     taskA_choir,
@@ -490,6 +497,16 @@ if __name__ == "__main__":
     #     model_type=RandomForestClassifier,
     #     mode="category",
     #     limit=None,
+    # )
+
+    # print("Reference score:", ensembler.choir.eval(ensembler()))
+    # print(
+    #     "Validation score:",
+    #     validation.eval(
+    #         ensembler(validation),
+    #         skipA=(scenario == "3-taskB"),
+    #         skipB=(scenario == "2-taskA"),
+    #     ),
     # )
 
     # print(len(validation.gold), len(validation.gold_annotated))

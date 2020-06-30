@@ -263,7 +263,7 @@ def build_generator_and_fn(
         elif learning:
             orchestrator = EnsembleOrchestrator(binary=True)
 
-            reference = orchestrator(choir)
+            reference = orchestrator(train_choir)
 
             _model_type = sampler.categorical(
                 ["randf", "svc", "logistic"], "model-type"
@@ -294,7 +294,7 @@ def build_generator_and_fn(
             )
 
             # ==== ENSEMBLER ================================================
-            ensembler = PredictiveEnsembler(choir, orchestrator, predictor)
+            ensembler = PredictiveEnsembler(train_choir, orchestrator, predictor)
 
         return SampleModel(sampler, ensembler)
 

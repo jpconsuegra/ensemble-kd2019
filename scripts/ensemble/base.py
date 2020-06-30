@@ -126,8 +126,8 @@ class EnsembleChoir:
     def _current_count(self, submit_name):
         return len(self.submissions.get(submit_name, []))
 
-    def eval(self, submit: Collection):
-        return self.evaluate(submit, self.gold)
+    def eval(self, submit: Collection, *, skipA=False, skipB=False, clamp=False):
+        return self.evaluate(submit, self.gold, skipA=skipA, skipB=skipB, clamp=clamp)
 
     @classmethod
     def evaluate(

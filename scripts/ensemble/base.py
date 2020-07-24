@@ -3,7 +3,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Optional, Union
 
-from scripts.score import compute_metrics, subtaskA, subtaskB
+from scripts.score import compute_macro_f1, compute_metrics, subtaskA, subtaskB
 from scripts.utils import Collection, CollectionHandler, Keyphrase, Relation, Sentence
 
 STOP = False
@@ -126,12 +126,36 @@ class EnsembleChoir:
     def _current_count(self, submit_name):
         return len(self.submissions.get(submit_name, []))
 
-    def eval(self, submit: Collection, *, skipA=False, skipB=False, clamp=False):
-        return self.evaluate(submit, self.gold, skipA=skipA, skipB=skipB, clamp=clamp)
+    def eval(
+        self,
+        submit: Collection,
+        *,
+        skipA=False,
+        skipB=False,
+        clamp=False,
+        macro=False,
+        all_metrics=False,
+    ):
+        return self.evaluate(
+            submit,
+            self.gold,
+            skipA=skipA,
+            skipB=skipB,
+            clamp=clamp,
+            macro=macro,
+            all_metrics=all_metrics,
+        )
 
     @classmethod
     def evaluate(
-        cls, submit: Collection, gold: Collection, skipA=False, skipB=False, clamp=False
+        cls,
+        submit: Collection,
+        gold: Collection,
+        skipA=False,
+        skipB=False,
+        clamp=False,
+        macro=False,
+        all_metrics=False,
     ):
         if clamp:
             sentences = []
@@ -149,12 +173,16 @@ class EnsembleChoir:
 
             submit = Collection(sentences)
 
-        results = cls.evaluate_scenario(submit, gold, skipA=skipA, skipB=skipB)
-        return results["f1"]
+        results = cls.evaluate_scenario(
+            submit, gold, skipA=skipA, skipB=skipB, macro=macro
+        )
+        return (
+            results if all_metrics else results["f1"] if not macro else results["macro"]
+        )
 
     @staticmethod
     def evaluate_scenario(
-        submit: Collection, gold: Collection, skipA=False, skipB=False
+        submit: Collection, gold: Collection, skipA=False, skipB=False, macro=False
     ):
         resultA = subtaskA(gold, submit)
         resultB = subtaskB(gold, submit, resultA)
@@ -164,8 +192,13 @@ class EnsembleChoir:
         for k, v in list(resultA.items()) + list(resultB.items()):
             results[k] = len(v)
 
-        metrics = compute_metrics(dict(resultA, **resultB), skipA, skipB)
+        data = dict(resultA, **resultB)
+
+        metrics = compute_metrics(data, skipA, skipB)
         results.update(metrics)
+
+        if macro:
+            results.update(compute_macro_f1(data, skipA, skipB))
 
         return results
 
@@ -213,8 +246,8 @@ class EnsembledCollection:
     def choir(self):
         return self._choir
 
-    def eval(self):
-        return self.choir.eval(self._collection)
+    def eval(self, macro=False):
+        return self.choir.eval(self._collection, macro=macro)
 
     @classmethod
     def build(cls, choir):

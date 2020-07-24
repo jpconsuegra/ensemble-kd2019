@@ -144,7 +144,11 @@ class SampleModel:
 
 
 def build_generator_and_fn(
-    choir: EnsembleChoir, gold: Collection = None, manual_voting=True, learning=True
+    choir: EnsembleChoir,
+    gold: Collection = None,
+    manual_voting=True,
+    learning=True,
+    macro=False,
 ):
     if gold is None:
         gold = choir.gold
@@ -301,7 +305,7 @@ def build_generator_and_fn(
     def fn(generated: SampleModel):
         ensembler = generated.model
         ensembled = ensembler()
-        return EnsembleChoir.evaluate(ensembled, gold, clamp=True)
+        return EnsembleChoir.evaluate(ensembled, gold, clamp=True, macro=macro)
 
     return generator, fn
 
@@ -314,9 +318,10 @@ def optimize_sampler_fn(
     pop_size,
     manual_voting=True,
     learning=True,
+    macro=False,
 ):
     generator, fn = build_generator_and_fn(
-        choir, gold, manual_voting=manual_voting, learning=learning
+        choir, gold, manual_voting=manual_voting, learning=learning, macro=macro
     )
     search = PESearch(
         generator_fn=generator,
@@ -326,7 +331,7 @@ def optimize_sampler_fn(
         search_timeout=0,
         allow_duplicates=False,
         pop_size=pop_size,
-        errors='ignore'
+        errors="ignore",
     )
     loggers = [ProgressLogger(), ConsoleLogger()]
     best, best_fn = search.run(generations=generations, logger=loggers)
@@ -340,8 +345,9 @@ def get_custom_ensembler(
     manual_voting=True,
     learning=True,
 ):
+    macro = False  # arbitrary value since the function is not used
     generator, _ = build_generator_and_fn(
-        choir, gold, manual_voting=manual_voting, learning=learning
+        choir, gold, manual_voting=manual_voting, learning=learning, macro=macro
     )
     sampler = LockedSampler(configuration)
     sample_model = generator(sampler, log=False)

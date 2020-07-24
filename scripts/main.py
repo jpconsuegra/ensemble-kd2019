@@ -401,6 +401,7 @@ if __name__ == "__main__":
     # )
 
     scenario = ["1-main", "2-taskA", "3-taskB"][1]
+
     ref_submissions = path2ehealth20_submissions
     ref_test = path2ehealth20_gold
     val_submissions = path2ehealth19_submissions
@@ -465,14 +466,18 @@ if __name__ == "__main__":
     #     choir,
     #     choir.gold_annotated,
     #     {
-    #         "load-best": True,
-    #         "learning": True,
-    #         "model-type": "randf",
-    #         "training-mode": "category",
-    #         "weight-learning-votes": True,
+    #         'load-best': False,
+    #         'top-best': False,
+    #         'n-submits': 15,
+    #         'submissions': ['vsp/576666', 'iakesg/576597', 'lsi_uned/575160', 'jlcuad/577119', 'vsp/576670', 'hulat-taskAB/576998', 'iakesg/576606', 'talp/576647', 'hulat-taskAB/576454', 'lsi2_uned/574805', 'vsp/576664', 'jlcuad/577097', 'lsi2_uned/575373', 'abravo/577194', 'vsp/576671'],
+    #         'binary': True,
+    #         'weighter': 'f1',
+    #         'scorer': 'expert',
+    #         'discrete-expert': True,
+    #         'validator': 'non-zero'
     #     },
     #     manual_voting=True,
-    #     learning=True,
+    #     learning=False,
     # )
 
     # task_run(ensembler, choir, scenario=scenario)
@@ -487,7 +492,8 @@ if __name__ == "__main__":
     #     generations=500,
     #     pop_size=10,
     #     manual_voting=True,
-    #     learning=True,
+    #     learning=False,
+    #     macro=True,
     # )
     # ensembler = best.model
     # task_cross_validate(
@@ -499,13 +505,29 @@ if __name__ == "__main__":
     #     limit=None,
     # )
 
-    # print("Reference score:", ensembler.choir.eval(ensembler()))
+    # print("Reference score:", ensembler.choir.eval(ensembler(), macro=False))
     # print(
     #     "Validation score:",
     #     validation.eval(
     #         ensembler(validation),
     #         skipA=(scenario == "3-taskB"),
     #         skipB=(scenario == "2-taskA"),
+    #         macro=False,
+    #     ),
+    # )
+
+    # print(
+    #     "Reference score (macro):",
+    #     ensembler.choir.eval(ensembler(), macro=True, all_metrics=True),
+    # )
+    # print(
+    #     "Validation score (macro):",
+    #     validation.eval(
+    #         ensembler(validation),
+    #         skipA=(scenario == "3-taskB"),
+    #         skipB=(scenario == "2-taskA"),
+    #         macro=True,
+    #         all_metrics=True,
     #     ),
     # )
 
@@ -515,5 +537,5 @@ if __name__ == "__main__":
     # print(len(choir.gold), len(choir.gold_annotated))
     # output = exclude_from(output, choir.gold_annotated)
     # print(len(output.gold))
-    # task_do_ensemble(ensembler, output, top=3000)
+    # task_do_ensemble(ensembler, output, top=8000)
     # Hay oraciones que estan tanto en el test viejo como en el nuevo!!!

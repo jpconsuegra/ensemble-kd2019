@@ -26,6 +26,9 @@ Learning-Per-Label-LogisticRegression 0.6611026808295397
 MultiSource-CrossVal-RandomForest 0.643228856842103
 MultiSource-CrossVal-SVC 0.651836695061918
 
+TALP-scenario1 0.639412997903564
+TALP-scenario4 0.6050707730595738
+
 Evaluating pipeline:
 {
     binary: True,
@@ -37,3 +40,108 @@ Evaluating pipeline:
     validator: non-zero
 }
 Fitness=0.666
+
+
+Search completed: best_fn=0.620, best=
+{
+    binary: True,
+    load-best: True,
+    top-best: True,
+    top-submits: 3,
+    weighter: f1,
+    scorer: expert,
+    discrete-expert: False,
+    validator: constant,
+    use-disc-threshold: False,
+    cont-threshold: 0.2138059222439279
+}
+
+Search completed: best_fn=0.675, best=
+{
+    load-best: False,
+    top-best: False,
+    n-submits: 1,
+    submissions: ['hulat-taskAB/576622'],
+    learning: True,
+    model-type: randf,
+    training-mode: category
+}
+
+Search completed: best_fn=0.675, best=
+{
+    'load-best': True,
+    'top-best': False,
+    'n-submits': 2,
+    'submissions': ['uhmajakd/576721', 'vsp/576661'],
+    'learning': True,
+    'model-type': 'randf',
+    'training-mode': 'category'
+}
+
+Search completed: best_fn=0.739, best=
+{
+    'load-best': True,
+    'top-best': True,
+    'top-submits': 1,
+    'learning': True,
+    'model-type': 'randf',
+    'training-mode': 'category'
+}
+
+Search completed: best_fn=0.675, best=
+{
+    'load-best': False,
+    'model-type': 'randf',
+    'training-mode': 'category',
+    'weight-learning-votes': True
+}
+
+{
+    'load-best': True,
+    'learning': True,
+    'model-type': 'randf',
+    'training-mode': 'category',
+    'weight-learning-votes': True
+}
+
+F1
+==== SCORE ====
+ 0.6164016999842593
+==== SCORE ====
+ 0.6472081218274112
+
+TALP
+ ==== SCORE ====
+ 0.6050707730595738
+==== SCORE ====
+ 0.639412997903564
+
+ Search completed: best_fn=0.619, best=
+{
+    'load-best': False,
+    'top-best': True,
+    'top-submits': 5,
+    'binary': True,
+    'weighter': 'f1',
+    'scorer': 'expert',
+    'discrete-expert': False,
+    'validator': 'non-zero'
+}
+
+Search completed: best_fn=0.619, best=
+{
+    'load-best': False,
+    'top-best': True,
+    'top-submits': 6,
+    'binary': True,
+    'weighter': 'f1',
+    'scorer': 'expert',
+    'discrete-expert': False,
+    'validator': 'constant',
+    'use-disc-threshold': False,
+    'cont-threshold': 0.21054059005160405
+}
+Reference score: 0.6194377510040161
+Validation score: 0.6498915401301519
+Scenario2: 0.8228614685844057
+Scenario3: 0.6070038910505836
